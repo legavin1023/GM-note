@@ -1,0 +1,198 @@
+{
+  "version": "1.0.0",
+  "title": "드래곤 에이지",
+  "scenarios": [
+    {
+      "id": "s1",
+      "code": "01",
+      "title": "잿빛 길목",
+      "description": "붉은 리륨 광산으로 향하는 길목에서 낯선 징조를 만납니다.",
+      "questions": [
+        {
+          "id": "q1",
+          "prompt": "무엇을 했습니까?",
+          "choices": [
+            { "id": "a", "label": "도움을 요청한다" },
+            { "id": "b", "label": "흔적을 추적한다" },
+            { "id": "c", "label": "우회한다" }
+          ]
+        },
+        {
+          "id": "q2",
+          "prompt": "발견한 징조에 어떻게 반응합니까?",
+          "choices": [
+            { "id": "a", "label": "죽인다" },
+            { "id": "b", "label": "살린다" },
+            { "id": "c", "label": "때린다" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "s2",
+      "code": "02",
+      "title": "잠들지 않는 요새",
+      "description": "오래된 요새의 문이 열리고, 안쪽에서 낮은 노래가 들려옵니다.",
+      "questions": [
+        {
+          "id": "q1",
+          "prompt": "요새에 어떻게 들어갑니까?",
+          "choices": [
+            { "id": "a", "label": "정면으로 진입한다" },
+            { "id": "b", "label": "비밀 통로를 찾는다" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "team-2",
+      "name": "붉은 사자단",
+      "region": "오자마",
+      "color": "#c6a35d",
+      "description": "운명으로 묶인 모험가들의 원정대입니다.",
+      "characters": [
+        {
+          "id": "c-2",
+          "name": "브란",
+          "player": "지훈",
+          "level": 3,
+          "race": "인간",
+          "class": "도적",
+          "gallery": []
+        }
+      ],
+      "scenarios": {
+        "s1": { "completed": false, "answers": {}, "gmNote": "" },
+        "s2": { "completed": false, "answers": {}, "gmNote": "" }
+      }
+    },
+    {
+      "id": "team-3",
+      "name": "황혼의 방랑자",
+      "region": "코르카리",
+      "color": "#6e9c91",
+      "description": "운명으로 묶인 모험가들의 원정대입니다.",
+      "characters": [
+        {
+          "id": "c-3",
+          "name": "세라",
+          "player": "서연",
+          "level": 3,
+          "race": "엘프",
+          "class": "마법사",
+          "gallery": []
+        }
+      ],
+      "scenarios": {
+        "s1": { "completed": false, "answers": {}, "gmNote": "" },
+        "s2": { "completed": false, "answers": {}, "gmNote": "" }
+      }
+    },
+    {
+      "id": "team-4",
+      "name": "철의 서약",
+      "region": "프리마치",
+      "color": "#7289b8",
+      "description": "운명으로 묶인 모험가들의 원정대입니다.",
+      "characters": [
+        {
+          "id": "c-4",
+          "name": "토마스",
+          "player": "도윤",
+          "level": 3,
+          "race": "드워프",
+          "class": "기사",
+          "gallery": []
+        }
+      ],
+      "scenarios": {
+        "s1": { "completed": false, "answers": {}, "gmNote": "" },
+        "s2": { "completed": false, "answers": {}, "gmNote": "" }
+      }
+    },
+    {
+      "id": "team-5",
+      "name": "별빛 순례자",
+      "region": "안티바",
+      "color": "#ae7898",
+      "description": "운명으로 묶인 모험가들의 원정대입니다.",
+      "characters": [
+        {
+          "id": "c-5",
+          "name": "린",
+          "player": "하린",
+          "level": 3,
+          "race": "인간",
+          "class": "궁수",
+          "gallery": []
+        }
+      ],
+      "scenarios": {
+        "s1": { "completed": false, "answers": {}, "gmNote": "" },
+        "s2": { "completed": false, "answers": {}, "gmNote": "" }
+      }
+    },
+    {
+      "id": "team-6",
+      "name": "검은 가시",
+      "region": "딥 로드",
+      "color": "#a56b62",
+      "description": "운명으로 묶인 모험가들의 원정대입니다.",
+      "characters": [
+        {
+          "id": "c-6",
+          "name": "카엘",
+          "player": "예준",
+          "level": 3,
+          "race": "쿠나리",
+          "class": "성직자",
+          "gallery": []
+        }
+      ],
+      "scenarios": {
+        "s1": { "completed": false, "answers": {}, "gmNote": "" },
+        "s2": { "completed": false, "answers": {}, "gmNote": "" }
+      }
+    }
+  ],
+  "teams": [
+    {
+      "id": "team-1",
+      "name": "회색 감시자",
+      "region": "데너림",
+      "color": "#c97954",
+      "description": "운명으로 묶인 모험가들의 원정대입니다.",
+      "characters": [
+        {
+          "id": "c-1",
+          "name": "아델린",
+          "player": "민서",
+          "tokenUrl": "",
+          "level": 3,
+          "age": "29",
+          "height": "178cm",
+          "weight": "72kg",
+          "race": "인간",
+          "background": "변경의 방랑자",
+          "socialClass": "자유민",
+          "class": "전사",
+          "motivation": "잃어버린 진실을 찾는다.",
+          "goal": "팀과 함께 살아남는다.",
+          "strengths": "관찰력과 결단력",
+          "doom": "혼자 모든 것을 짊어진다.",
+          "languages": "공용어, 고대어",
+          "traits": "조용하지만 날카롭다.",
+          "biography": "",
+          "gmSecret": "",
+          "playerGmSecret": "",
+          "gallery": []
+        }
+      ],
+      "scenarios": {
+        "s1": { "completed": false, "answers": {}, "gmNote": "" },
+        "s2": { "completed": false, "answers": {}, "gmNote": "" }
+      }
+    }
+  ],
+  "gallery": []
+}

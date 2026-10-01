@@ -1,0 +1,89 @@
+{
+  "campaign": "dragon-age",
+  "scenarios": [
+    {
+      "code": "S01",
+      "title": "잿빛 길목",
+      "description": "붉은 리륨 광산으로 향하는 길목에서 낯선 징조를 만납니다.",
+      "sort_order": 1,
+      "questions": [
+        {
+          "code": "Q01",
+          "step_number": 1,
+          "prompt": "낯선 징조에 어떻게 반응합니까?",
+          "sort_order": 1,
+          "choices": [
+            { "code": "A", "label": "도움을 요청한다", "sort_order": 1 },
+            { "code": "B", "label": "흔적을 추적한다", "sort_order": 2 },
+            { "code": "C", "label": "우회한다", "sort_order": 3 }
+          ]
+        },
+        {
+          "code": "Q02",
+          "step_number": 1,
+          "prompt": "발견한 생존자를 어떻게 처리합니까?",
+          "sort_order": 2,
+          "choices": [
+            { "code": "A", "label": "함께 데려간다", "sort_order": 1 },
+            { "code": "B", "label": "안전한 장소에 두고 간다", "sort_order": 2 },
+            { "code": "C", "label": "치료 후 돌아가게 한다", "sort_order": 3 }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "S02",
+      "title": "잠들지 않는 요새",
+      "description": "오래된 요새의 문이 열리고, 안쪽에서 낮은 노래가 들려옵니다.",
+      "sort_order": 2,
+      "questions": [
+        {
+          "code": "Q01",
+          "step_number": 2,
+          "prompt": "요새에 어떻게 들어갑니까?",
+          "sort_order": 1,
+          "choices": [
+            { "code": "A", "label": "정면으로 진입한다", "sort_order": 1 },
+            { "code": "B", "label": "비밀 통로를 찾는다", "sort_order": 2 }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "S03",
+      "title": "깊은 길의 문턱",
+      "description": "지하로 이어지는 문턱에서 각자의 과거가 모습을 드러냅니다.",
+      "sort_order": 3,
+      "questions": [
+        {
+          "code": "Q01",
+          "step_number": 3,
+          "prompt": "문턱에서 무엇을 합니까?",
+          "sort_order": 1,
+          "choices": [
+            { "code": "A", "label": "문을 연다", "sort_order": 1 },
+            { "code": "B", "label": "봉인한다", "sort_order": 2 }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "S04",
+      "title": "왕좌 아래의 속삭임",
+      "description": "돌 아래 잠든 존재가 마지막 거래를 제안합니다.",
+      "sort_order": 4,
+      "questions": [
+        {
+          "code": "Q01",
+          "step_number": 4,
+          "prompt": "마지막 거래에 어떻게 답합니까?",
+          "sort_order": 1,
+          "choices": [
+            { "code": "A", "label": "거래를 받아들인다", "sort_order": 1 },
+            { "code": "B", "label": "거부한다", "sort_order": 2 }
+          ]
+        }
+      ]
+    }
+  ]
+}

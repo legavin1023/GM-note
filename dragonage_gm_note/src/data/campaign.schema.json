@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/dragonage/campaign.schema.json",
+  "title": "DragonAge Campaign",
+  "type": "object",
+  "required": ["version", "title", "scenarios", "teams", "gallery"],
+  "properties": {
+    "version": { "type": "string" },
+    "title": { "type": "string" },
+    "scenarios": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/scenario" }
+    },
+    "teams": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/team" }
+    },
+    "gallery": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/image" }
+    }
+  },
+  "$defs": {
+    "scenario": {
+      "type": "object",
+      "required": ["id", "code", "title", "description", "questions"],
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "questions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "prompt", "choices"],
+            "properties": {
+              "id": { "type": "string" },
+              "prompt": { "type": "string" },
+              "choices": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": ["id", "label"],
+                  "properties": {
+                    "id": { "type": "string" },
+                    "label": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "team": {
+      "type": "object",
+      "required": ["id", "name", "region", "color", "characters", "scenarios"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "region": { "type": "string" },
+        "color": { "type": "string" },
+        "description": { "type": "string" },
+        "characters": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/character" }
+        },
+        "scenarios": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/teamScenario" }
+        }
+      }
+    },
+    "teamScenario": {
+      "type": "object",
+      "required": ["completed", "answers", "gmNote"],
+      "properties": {
+        "completed": { "type": "boolean" },
+        "answers": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "gmNote": { "type": "string" }
+      }
+    },
+    "character": {
+      "type": "object",
+      "required": ["id", "name", "player", "level", "race", "class"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "player": { "type": "string" },
+        "tokenUrl": { "type": "string" },
+        "level": { "type": "integer", "minimum": 1 },
+        "age": { "type": "string" },
+        "height": { "type": "string" },
+        "weight": { "type": "string" },
+        "race": { "type": "string" },
+        "background": { "type": "string" },
+        "socialClass": { "type": "string" },
+        "class": { "type": "string" },
+        "motivation": { "type": "string" },
+        "goal": { "type": "string" },
+        "strengths": { "type": "string" },
+        "doom": { "type": "string" },
+        "languages": { "type": "string" },
+        "traits": { "type": "string" },
+        "biography": { "type": "string" },
+        "gmSecret": { "type": "string" },
+        "playerGmSecret": { "type": "string" },
+        "gallery": { "type": "array", "items": { "$ref": "#/$defs/image" } }
+      }
+    },
+    "image": {
+      "type": "object",
+      "required": ["id", "url", "caption", "owner"],
+      "properties": {
+        "id": { "type": "string" },
+        "url": { "type": "string", "format": "uri" },
+        "caption": { "type": "string" },
+        "owner": { "type": "string" },
+        "teamId": { "type": "string" }
+      }
+    }
+  }
+}
