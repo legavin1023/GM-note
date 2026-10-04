@@ -94,7 +94,7 @@ export async function getTeamScenarios(teamId) {
     .from("team_scenarios")
     .select(
       `
-      id, team_id, scenario_id, completed, gm_note, step_number, created_at, updated_at,
+      id, team_id, scenario_id, completed, step_number, created_at, updated_at,
       team_scenario_answers(
         id, team_scenario_id, question_id, choice_id, created_at
       )
@@ -103,7 +103,17 @@ export async function getTeamScenarios(teamId) {
     .eq("team_id", teamId);
 
   if (error) throw error;
-  return data || [];
+  return attachGmNotes(data || []);
+}
+
+async function attachGmNotes(records) {
+  if (!records.length) return records;
+  const { data, error } = await supabase.from("team_scenario_gm_notes")
+    .select("team_scenario_id, gm_note")
+    .in("team_scenario_id", records.map((record) => record.id));
+  if (error) throw error;
+  const notes = new Map((data || []).map((note) => [note.team_scenario_id, note.gm_note]));
+  return records.map((record) => ({ ...record, gm_note: notes.get(record.id) || "" }));
 }
 
 /**
@@ -114,7 +124,7 @@ export async function getAllTeamScenariosForScenario(scenarioId) {
     .from("team_scenarios")
     .select(
       `
-      id, team_id, scenario_id, completed, gm_note, updated_at,
+      id, team_id, scenario_id, completed, updated_at,
       team_scenario_answers(
         id, team_scenario_id, question_id, choice_id
       )
@@ -123,7 +133,7 @@ export async function getAllTeamScenariosForScenario(scenarioId) {
     .eq("scenario_id", scenarioId);
 
   if (error) throw error;
-  return data || [];
+  return attachGmNotes(data || []);
 }
 
 /**
@@ -133,7 +143,7 @@ export async function getOrCreateTeamScenario(teamId, scenarioId) {
   // 먼저 조회
   const { data: existing, error: lookupError } = await supabase
     .from("team_scenarios")
-    .select("*")
+    .select("id, team_id, scenario_id, completed, step_number, created_at, updated_at")
     .eq("team_id", teamId)
     .eq("scenario_id", scenarioId)
     .maybeSingle();
@@ -145,13 +155,14 @@ export async function getOrCreateTeamScenario(teamId, scenarioId) {
       .from("team_scenario_answers")
       .select("*")
       .eq("team_scenario_id", existing.id);
-    return { ...existing, team_scenario_answers: answers || [] };
+    const [withNote] = await attachGmNotes([existing]);
+    return { ...withNote, team_scenario_answers: answers || [] };
   }
 
   // 없으면 생성
   const { data: created, error } = await supabase
     .from("team_scenarios")
-    .insert({ team_id: teamId, scenario_id: scenarioId, completed: false, gm_note: "" })
+    .insert({ team_id: teamId, scenario_id: scenarioId, completed: false })
     .select()
     .single();
 
@@ -163,7 +174,7 @@ export async function getOrCreateTeamScenario(teamId, scenarioId) {
 export async function getOrCreateTeamProgressStage(teamId, stepNumber) {
   const { data: existing, error: lookupError } = await supabase
     .from("team_scenarios")
-    .select("*")
+    .select("id, team_id, scenario_id, completed, step_number, created_at, updated_at")
     .eq("team_id", teamId)
     .eq("step_number", stepNumber)
     .order("created_at", { ascending: true })
@@ -176,12 +187,13 @@ export async function getOrCreateTeamProgressStage(teamId, stepNumber) {
       .select("id, team_scenario_id, question_id, choice_id")
       .eq("team_scenario_id", existing.id);
     if (answersError) throw answersError;
-    return { ...existing, team_scenario_answers: answers || [] };
+    const [withNote] = await attachGmNotes([existing]);
+    return { ...withNote, team_scenario_answers: answers || [] };
   }
 
   const { data, error } = await supabase
     .from("team_scenarios")
-    .insert({ team_id: teamId, step_number: stepNumber, completed: false, gm_note: "" })
+    .insert({ team_id: teamId, step_number: stepNumber, completed: false })
     .select()
     .single();
   if (error) throw error;
@@ -194,7 +206,7 @@ export async function getTeamProgressRecords(teamIds) {
   const { data, error } = await supabase
     .from("team_scenarios")
     .select(`
-      id, team_id, scenario_id, step_number, completed, gm_note, updated_at,
+      id, team_id, scenario_id, step_number, completed, updated_at,
       team_scenario_answers(id, team_scenario_id, question_id, choice_id)
     `)
     .in("team_id", teamIds)
@@ -295,19 +307,26 @@ export async function addProgressStageQuestion(stepNumber, prompt, choiceLabels)
  */
 export async function saveTeamScenarioStatus(
   teamScenarioId,
-  { completed, gmNote }
+  { completed }
 ) {
   const { data, error } = await supabase
     .from("team_scenarios")
     .update({
       completed: Boolean(completed),
-      gm_note: gmNote || "",
       updated_at: new Date().toISOString(),
     })
     .eq("id", teamScenarioId)
     .select()
     .single();
 
+  if (error) throw error;
+  return data;
+}
+
+export async function saveTeamScenarioNote(teamScenarioId, gmNote) {
+  const { data, error } = await supabase.from("team_scenario_gm_notes")
+    .upsert({ team_scenario_id: teamScenarioId, gm_note: gmNote || "", updated_at: new Date().toISOString() }, { onConflict: "team_scenario_id" })
+    .select().single();
   if (error) throw error;
   return data;
 }
@@ -550,6 +569,7 @@ export async function exportFullBackup(campaignId, teams) {
         characters: (team.characters || []).map((c) => ({
           id: c.id,
           username: c.username,
+          character_name: c.character_name,
           player: c.player,
           token_url: c.token_url,
           level: c.level,

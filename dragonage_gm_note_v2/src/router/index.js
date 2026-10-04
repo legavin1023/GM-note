@@ -12,14 +12,19 @@ const ScenariosView = () => import("@/views/ScenariosView.vue");
 const ScenarioDetailView = () => import("@/views/ScenarioDetailView.vue");
 const MasterView = () => import("@/views/MasterView.vue");
 const GalleryView = () => import("@/views/GalleryView.vue");
-const AdminScenariosView = () => import("@/views/AdminScenariosView.vue");
-const AdminImportView = () => import("@/views/AdminImportView.vue");
 
 const routes = [
   {
     path: "/login",
     name: "login",
     component: LoginView,
+    meta: { requiresGuest: true },
+  },
+  {
+    path: "/player-login",
+    name: "player-login",
+    component: LoginView,
+    props: { playerMode: true },
     meta: { requiresGuest: true },
   },
   {
@@ -75,16 +80,6 @@ const routes = [
         name: "gallery",
         component: GalleryView,
       },
-      {
-        path: "admin/scenarios",
-        name: "admin-scenarios",
-        component: AdminScenariosView,
-      },
-      {
-        path: "admin/scenarios/import",
-        name: "admin-import",
-        component: AdminImportView,
-      },
     ],
   },
   {
@@ -112,7 +107,24 @@ router.beforeEach(async (to) => {
     return { name: "login" };
   }
   if (to.meta.requiresGuest && isAuthenticated) {
-    return { name: "master" };
+    const { data: context } = await supabase.rpc("player_team_context");
+    return { name: Array.isArray(context) && context.length ? "scenarios" : "master" };
+  }
+  if (isAuthenticated) {
+    const { data: context, error } = await supabase.rpc("player_team_context");
+    if (!error && Array.isArray(context) && context.length) {
+      const allowed = ["scenarios", "scenario-detail", "team-detail"];
+      if (!allowed.includes(to.name)) return { name: "scenarios" };
+      if (to.name === "team-detail" && to.params.teamId !== context[0].team_id) {
+        return { name: "team-detail", params: { teamId: context[0].team_id }, replace: true };
+      }
+      if (to.name === "scenario-detail" && to.query.teamId !== context[0].team_id) {
+        return { name: "scenarios" };
+      }
+      if (to.name === "scenario-detail" && !/^\d+$/.test(String(to.params.scenarioId))) {
+        return { name: "scenarios" };
+      }
+    }
   }
 });
 

@@ -5,12 +5,21 @@
         <span class="brand-mark">DA</span>
         <div>
           <strong>DragonAge</strong>
-          <small>GM COMMAND CENTER</small>
+          <small>{{ playerMode ? "PLAYER ACCESS" : "GM COMMAND CENTER" }}</small>
         </div>
       </div>
-      <h1>캠페인에<br /><em>로그인하세요.</em></h1>
+      <h1>{{ playerMode ? "플레이어" : "GM" }} 계정으로<br /><em>로그인하세요.</em></h1>
       <form @submit.prevent="handleLogin">
-        <label>
+        <label v-if="playerMode">
+          로그인 아이디 (username)
+          <select v-model="username" required :disabled="playerEmailsLoading || !playerUsernames.length">
+            <option value="" disabled>{{ playerEmailsLoading ? "계정 목록을 불러오는 중…" : "플레이어 아이디를 선택하세요" }}</option>
+            <option v-for="playerUsername in playerUsernames" :key="playerUsername" :value="playerUsername">
+              {{ playerUsername }}
+            </option>
+          </select>
+        </label>
+        <label v-else>
           이메일
           <input v-model.trim="email" type="email" required autocomplete="email" />
         </label>
@@ -24,38 +33,84 @@
           />
         </label>
         <p v-if="errorMessage" class="login-error">{{ errorMessage }}</p>
-        <button type="submit" :disabled="loading" class="login-button">
+        <p v-if="playerMode && !playerEmailsLoading && !playerUsernames.length && !errorMessage" class="login-error">팀에 소속된 플레이어 username이 없습니다.</p>
+        <button type="submit" :disabled="loading || playerEmailsLoading || (playerMode && !playerUsernames.length)" class="login-button">
           {{ loading ? "로그인 중..." : "로그인" }}
         </button>
       </form>
+      <router-link v-if="playerMode" class="login-switch" :to="{ name: 'login' }">GM 로그인으로</router-link>
+      <router-link v-else class="login-switch" :to="{ name: 'player-login' }">플레이어 로그인으로</router-link>
     </div>
   </div>
 </template>
 
 <script>
-import { signIn } from "@/services/auth";
+import { signIn, signOut } from "@/services/auth";
+import { getPlayerLoginUsernames, signInPlayer } from "@/services/playerAccounts";
+import { supabase } from "@/supabase";
 
 export default {
   name: "LoginView",
+  props: {
+    playerMode: { type: Boolean, default: false },
+  },
   data() {
     return {
       email: "",
+      username: "",
       password: "",
       loading: false,
       errorMessage: "",
+      playerUsernames: [],
+      playerEmailsLoading: false,
     };
   },
+  mounted() {
+    if (this.playerMode) this.loadPlayerUsernames();
+  },
+  watch: {
+    playerMode(enabled) {
+      if (enabled && !this.playerUsernames.length) this.loadPlayerUsernames();
+      if (!enabled) {
+        this.email = "";
+        this.playerUsernames = [];
+        this.errorMessage = "";
+      }
+    },
+  },
   methods: {
+    async loadPlayerUsernames() {
+      this.playerEmailsLoading = true;
+      try {
+        this.playerUsernames = await getPlayerLoginUsernames();
+      } catch (error) {
+        this.errorMessage = "플레이어 계정 목록을 불러오지 못했습니다: " + (error.message || error);
+      } finally {
+        this.playerEmailsLoading = false;
+      }
+    },
     async handleLogin() {
       this.loading = true;
       this.errorMessage = "";
       try {
-        await signIn(this.email, this.password);
+        if (this.playerMode) await signInPlayer(this.username, this.password);
+        else await signIn(this.email, this.password);
+        const { data: context, error: contextError } = await supabase.rpc("player_team_context");
+        if (contextError) throw contextError;
+        const isPlayerAccount = Array.isArray(context) && context.length > 0;
+        if (isPlayerAccount !== this.playerMode) {
+          await signOut();
+          throw new Error(this.playerMode
+            ? "이 계정은 플레이어 팀에 연결되어 있지 않습니다. GM에게 팀 연결을 요청하세요."
+            : "플레이어 계정입니다. 플레이어 로그인 화면을 이용하세요.");
+        }
         // onAuthStateChange가 router guard를 통해 자동 리디렉션
-        this.$router.push({ name: "master" });
+        this.$router.push({ name: this.playerMode ? "scenarios" : "master" });
       } catch (error) {
         if (error.message?.includes("Invalid login credentials")) {
-          this.errorMessage = "이메일 또는 비밀번호가 올바르지 않습니다.";
+          this.errorMessage = this.playerMode
+            ? "아이디 또는 비밀번호가 올바르지 않습니다."
+            : "이메일 또는 비밀번호가 올바르지 않습니다.";
         } else {
           this.errorMessage = error.message || "로그인에 실패했습니다.";
         }
@@ -142,7 +197,8 @@ label {
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
-label input {
+label input,
+label select {
   background: #181c28;
   border: 1px solid #2e3448;
   color: #f4f2ed;
@@ -152,7 +208,8 @@ label input {
   outline: none;
   transition: border-color 0.15s;
 }
-label input:focus {
+label input:focus,
+label select:focus {
   border-color: #c97954;
 }
 .login-error {
@@ -182,5 +239,13 @@ label input:focus {
 .login-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+.login-switch {
+  display: block;
+  margin-top: 20px;
+  color: #c97954;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
 }
 </style>

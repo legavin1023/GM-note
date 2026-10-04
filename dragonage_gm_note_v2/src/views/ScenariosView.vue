@@ -5,15 +5,10 @@
         <span class="eyebrow">SHARED SCENARIO LOG</span>
         <h2 class="section-title">시나리오 트래커</h2>
       </div>
-      <router-link to="/admin/scenarios" class="outline-button"
-        >시나리오 관리</router-link
-      >
     </div>
 
     <div v-if="!scenarios.length" class="empty-state">
-      등록된 시나리오가 없습니다.
-      <router-link to="/admin/scenarios/import">JSON 가져오기</router-link>에서
-      시나리오를 추가하세요.
+      {{ isGM ? '등록된 시나리오가 없습니다.' : '본인 팀이 완료한 이전 단계 기록이 없습니다.' }}
     </div>
 
     <div v-else-if="recordsError" class="empty-state">팀별 서버 기록 조회 실패: {{ recordsError }}</div>
@@ -45,12 +40,15 @@
           <span class="eyebrow">{{ selected.code }}</span>
           <h2>{{ selected.title }}</h2>
           <p class="muted">{{ selected.description }}</p>
-          <router-link
+          <router-link v-if="isGM"
             :to="'/scenarios/' + selected.id"
             class="primary-button"
             style="display: inline-block; margin-top: 12px"
           >
             팀별 플레이 기록 작성 / 편집 →
+          </router-link>
+          <router-link v-else :to="{ path: '/scenarios/' + selected.id, query: { teamId: playerTeamId } }" class="primary-button" style="display:inline-block;margin-top:12px">
+            내 팀 답변 보기 / 편집 →
           </router-link>
         </div>
 
@@ -99,7 +97,7 @@
         </div>
 
         <!-- 팀별 완료 현황 요약 -->
-        <div class="team-status-block">
+        <div v-if="isGM" class="team-status-block">
           <div class="section-heading">
             <span class="eyebrow">TEAM STATUS</span>
           </div>
@@ -149,13 +147,20 @@ export default {
   },
   computed: {
     scenarios() {
-      return this.$store.state.progressStages.map((stage) => ({
+      const stages = this.$store.state.progressStages.map((stage) => ({
         ...stage,
         id: String(stage.step_number),
         code: `S${String(stage.step_number).padStart(2, "0")}`,
         questions: this.stageQuestions.filter((question) => question.step_number === stage.step_number),
       }));
+      if (this.isGM) return stages;
+      const team = this.$store.state.teams[0];
+      return stages.filter((stage) => stage.step_number < Number(team?.progress_step || 1)
+        && this.playerStageRecords.some((record) => record.step_number === stage.step_number && record.completed));
     },
+    isGM() { return this.$store.state.userRole !== "player"; },
+    playerTeamId() { return this.$store.state.playerTeamId; },
+    playerStageRecords() { return this.$store.state.playerStageRecords || []; },
     sortedTeams() {
       return this.$store.getters.sortedTeams;
     },
@@ -170,9 +175,19 @@ export default {
   },
   mounted() {
     this.loadStageQuestions();
+    if (!this.isGM) this.loadPlayerRecords();
     if (this.scenarios.length) this.selectScenario(this.scenarios[0]);
   },
   methods: {
+    async loadPlayerRecords() {
+      try {
+        const records = await getTeamProgressRecords([this.playerTeamId]);
+        this.$store.commit("setPlayerStageRecords", records);
+        if (this.scenarios.length) this.selectScenario(this.scenarios[0]);
+      } catch (error) {
+        this.recordsError = error.message || String(error);
+      }
+    },
     teamsForChoice(questionId, choiceId) {
       return this.sortedTeams.filter((team) => {
         const answers = this.teamRecords[team.id]?.team_scenario_answers || [];

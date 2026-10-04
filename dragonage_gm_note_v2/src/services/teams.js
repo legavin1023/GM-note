@@ -31,7 +31,7 @@ export async function getTeam(teamId) {
       id, name, description, region, color, sort_order,
       progress_step, total_steps, campaign_id, created_at,
       users(
-        id, team_id, username, player, token_url, level,
+        id, team_id, username, character_name, player, token_url, level,
         age, height, weight, race, background, social_class, class,
         motivation, goal, strengths, doom, languages, traits,
         biography, gm_secret, player_gm_secret, character_quirk, updated_at

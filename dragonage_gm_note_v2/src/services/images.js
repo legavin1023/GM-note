@@ -1,5 +1,5 @@
 /**
- * images.js — 이미지 갤러리 관련 Supabase 함수
+ * images.js — 토큰 갤러리 관련 Supabase 함수
  */
 import { supabase } from "@/supabase";
 
@@ -36,7 +36,14 @@ export async function getCampaignImages(campaignId) {
 /**
  * 이미지 저장 (URL 등록)
  */
-export async function saveImage({ campaignId, teamId, characterId, url, caption, ownerLabel }) {
+export async function saveImage({
+  campaignId,
+  teamId,
+  characterId,
+  url,
+  caption,
+  ownerLabel,
+}) {
   const { data, error } = await supabase
     .from("images")
     .insert({
@@ -68,7 +75,9 @@ export async function deleteImage(imageId) {
 export async function uploadGalleryImage(file, campaignId, teamId) {
   const timestamp = Date.now();
   const ext = file.name.split(".").pop();
-  const path = `gallery/${campaignId}/${teamId || "common"}/${timestamp}.${ext}`;
+  const path = `gallery/${campaignId}/${
+    teamId || "common"
+  }/${timestamp}.${ext}`;
 
   // campaign-assets 버킷 시도
   const { error: uploadError } = await supabase.storage

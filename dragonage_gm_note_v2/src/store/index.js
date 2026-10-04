@@ -5,6 +5,9 @@ export default createStore({
   state: {
     // GM 인증 정보
     gmUser: null,
+    userRole: null,
+    playerTeamId: null,
+    playerStageRecords: [],
     // 현재 캠페인
     campaign: null,
     // 팀 목록 (캐릭터 포함)
@@ -37,6 +40,13 @@ export default createStore({
   mutations: {
     setGmUser(state, user) {
       state.gmUser = user;
+    },
+    setPlayerContext(state, teamId) {
+      state.userRole = teamId ? "player" : "gm";
+      state.playerTeamId = teamId || null;
+    },
+    setPlayerStageRecords(state, records) {
+      state.playerStageRecords = records || [];
     },
     setCampaign(state, campaign) {
       state.campaign = campaign;

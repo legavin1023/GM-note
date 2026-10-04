@@ -41,10 +41,10 @@
               v-for="char in (team.characters || []).slice(0, 4)"
               :key="char.id"
               class="char-token"
-              :title="char.username"
+              :title="char.character_name"
             >
-              <img v-if="char.token_url" :src="char.token_url" :alt="char.username" />
-              <span v-else>{{ (char.username || '?')[0] }}</span>
+              <img v-if="char.token_url" :src="char.token_url" :alt="char.character_name" />
+              <span v-else>{{ (char.character_name || '?')[0] }}</span>
             </div>
             <div v-if="(team.characters || []).length > 4" class="char-token char-token-more">
               +{{ (team.characters || []).length - 4 }}

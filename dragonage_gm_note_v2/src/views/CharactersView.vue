@@ -27,14 +27,14 @@
             v-if="char.token_url && !imageErrors[char.id]"
             :src="char.token_url"
             class="char-avatar-image"
-            :alt="char.username || 'Character token'"
+            :alt="char.character_name || 'Character token'"
             @error="markImageError(char.id)"
           />
-          <span v-if="!char.token_url || imageErrors[char.id]">{{ (char.username || '?')[0] }}</span>
+          <span v-if="!char.token_url || imageErrors[char.id]">{{ (char.character_name || '?')[0] }}</span>
         </div>
         <div class="char-details">
           <div class="char-name-row">
-            <h3>{{ char.username || '이름 없음' }}</h3>
+            <h3>{{ char.character_name || '이름 없음' }}</h3>
             <span class="team-badge" :style="{ borderColor: getTeamColor(char.team_id) }">
               {{ getTeamName(char.team_id) }}
             </span>

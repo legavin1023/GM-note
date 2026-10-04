@@ -20,7 +20,7 @@
           class="result-item"
           @click="$emit('close')"
         >
-          <span class="res-title">{{ c.username }}</span>
+          <span class="res-title">{{ c.character_name || '이름 없음' }}</span>
           <span class="res-sub muted">PL: {{ c.player }} · {{ getTeamName(c.team_id) }}</span>
         </router-link>
       </div>
@@ -76,6 +76,7 @@ export default {
       if (!this.q) return [];
       return this.allCharacters.filter(
         (c) =>
+          (c.character_name && c.character_name.toLowerCase().includes(this.q)) ||
           (c.username && c.username.toLowerCase().includes(this.q)) ||
           (c.player && c.player.toLowerCase().includes(this.q))
       );

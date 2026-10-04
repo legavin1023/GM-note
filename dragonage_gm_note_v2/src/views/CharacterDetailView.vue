@@ -3,7 +3,7 @@
     <div class="section-heading">
       <div>
         <span class="eyebrow">CHARACTER PROFILE</span>
-        <h2 class="section-title">{{ character.username || "이름 없음" }}</h2>
+        <h2 class="section-title">{{ character.character_name || "이름 없음" }}</h2>
       </div>
       <div class="header-actions">
         <button class="primary-button" :disabled="saving" @click="handleSave">
@@ -26,7 +26,7 @@
               @error="tokenImageFailed = true"
             />
             <span v-if="!character.token_url || tokenImageFailed">{{
-              (character.username || "?")[0]
+              (character.character_name || "?")[0]
             }}</span>
           </div>
           <label class="upload-btn outline-button">
@@ -85,8 +85,12 @@
 
         <div class="profile-fields">
           <label class="form-label">
-            캐릭터 이름
+            로그인 아이디 (username)
             <input v-model="character.username" class="form-input" required />
+          </label>
+          <label class="form-label">
+            캐릭터 이름
+            <input v-model="character.character_name" class="form-input" required />
           </label>
           <label class="form-label">
             PL (플레이어 이름)
@@ -343,7 +347,7 @@ export default {
     },
     async handleDelete() {
       if (
-        !confirm(`'${this.character.username}' 캐릭터를 정말 삭제하시겠습니까?`)
+        !confirm(`'${this.character.character_name}' 캐릭터를 정말 삭제하시겠습니까?`)
       )
         return;
       try {
@@ -380,7 +384,7 @@ export default {
           this.character.team_id || "common",
           this.characterId,
           this.$store.getters.campaignId,
-          this.character.username || ""
+          this.character.character_name || ""
         );
         this.character.token_url = url;
         await this.loadTokenHistory();

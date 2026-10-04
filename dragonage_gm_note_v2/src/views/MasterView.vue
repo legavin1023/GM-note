@@ -82,8 +82,6 @@
 
       <div v-if="!trackerScenarios.length" class="empty-state">
         등록된 시나리오가 없습니다.
-        <router-link to="/admin/scenarios/import">JSON 가져오기</router-link>에서
-        시나리오를 추가하세요.
       </div>
       <div v-else-if="loadingRecords" class="empty-state">팀별 선택 기록을 불러오는 중…</div>
       <div v-else-if="recordsError || progressError" class="empty-state">서버 기록 조회에 실패했습니다: {{ recordsError || progressError }}</div>
@@ -281,7 +279,7 @@ export default {
           if (char.updated_at) {
             items.push({
               key: "char-" + char.id,
-              title: `캐릭터 "${char.username || '이름 없음'}" 수정`,
+              title: `캐릭터 "${char.character_name || '이름 없음'}" 수정`,
               sub: team.name,
               time: this.formatTime(char.updated_at),
               color: team.color,

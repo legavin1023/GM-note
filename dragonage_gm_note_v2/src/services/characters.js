@@ -13,7 +13,7 @@ export async function getCharactersForTeams(teamIds) {
     .from("users")
     .select("*")
     .in("team_id", teamIds)
-    .order("username", { ascending: true });
+    .order("character_name", { ascending: true });
   if (error) {
     console.error("[Supabase] USERS/CHARACTERS ERROR", error);
     throw error;
@@ -25,7 +25,8 @@ export async function getCharactersForTeams(teamIds) {
 const CHARACTER_FIELDS = [
   "id",
   "team_id",
-  "username",       // 캐릭터 이름
+  "username",       // 로그인 아이디
+  "character_name", // 캐릭터 이름
   "player",         // PL 이름
   "token_url",      // 토큰 이미지 URL
   "level",          // 레벨

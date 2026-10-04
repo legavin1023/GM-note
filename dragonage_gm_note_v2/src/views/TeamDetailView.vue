@@ -3,7 +3,12 @@
     <!-- 상단 헤더 -->
     <div class="team-header-card card">
       <div class="team-header-top">
-        <div class="team-symbol-lg" :style="{ background: team.color }" :aria-label="team.name + ' 팀 색상'" role="img"></div>
+        <div
+          class="team-symbol-lg"
+          :style="{ background: team.color }"
+          :aria-label="team.name + ' 팀 색상'"
+          role="img"
+        ></div>
         <div class="team-header-info">
           <div class="team-title-row">
             <h2>{{ team.name }}</h2>
@@ -11,7 +16,7 @@
           </div>
           <p class="muted">{{ team.description || "설명이 없습니다." }}</p>
         </div>
-        <div class="team-header-actions">
+        <div v-if="isGM" class="team-header-actions">
           <button class="outline-button" @click="showEditModal = true">
             팀 정보 수정
           </button>
@@ -48,16 +53,17 @@
           <span class="eyebrow">CHARACTERS</span>
           <h3 class="section-title">소속 캐릭터</h3>
         </div>
-        <button class="primary-button" @click="handleAddCharacter">
+        <button v-if="isGM" class="primary-button" @click="handleAddCharacter">
           ＋ 캐릭터 추가
         </button>
       </div>
 
       <div class="character-grid">
-        <router-link
+        <component
+          :is="isGM ? 'router-link' : 'div'"
           v-for="char in team.characters || []"
           :key="char.id"
-          :to="'/characters/' + char.id"
+          :to="isGM ? '/characters/' + char.id : undefined"
           class="character-card card"
         >
           <div class="char-avatar" :style="{ backgroundColor: team.color }">
@@ -65,23 +71,22 @@
               v-if="char.token_url && !imageErrors[char.id]"
               :src="char.token_url"
               class="char-avatar-image"
-              :alt="char.username || 'Character token'"
+              :alt="char.character_name || 'Character token'"
               @error="markImageError(char.id)"
             />
-            <span v-if="!char.token_url || imageErrors[char.id]">{{ (char.username || "?")[0] }}</span>
+            <span v-if="!char.token_url || imageErrors[char.id]">{{
+              (char.character_name || "?")[0]
+            }}</span>
           </div>
           <div class="char-info">
-            <h4>{{ char.username || "이름 없음" }}</h4>
+            <h4>{{ char.character_name || "이름 없음" }}</h4>
             <span class="char-sub muted">
-              {{ char.race || "종족미정" }} {{ char.class || "클래스미정" }} ·
-              Lv.{{ char.level || 1 }}
+              {{ char.age || "나이 미정" }} · {{ char.race || "종족미정" }} ·
+              {{ char.class || "클래스미정" }} · Lv.{{ char.level || 1 }}
             </span>
-            <span class="char-player muted"
-              >PL: {{ char.player || "홍길동" }}</span
-            >
           </div>
-          <span class="char-arrow">↗</span>
-        </router-link>
+          <span v-if="isGM" class="char-arrow">↗</span>
+        </component>
         <div v-if="!(team.characters || []).length" class="empty-state">
           소속된 캐릭터가 없습니다. 캐릭터를 추가해보세요.
         </div>
@@ -89,7 +94,7 @@
     </section>
 
     <!-- 시나리오 진행 및 기록 -->
-    <section class="section-block">
+    <section v-if="isGM" class="section-block">
       <div class="section-heading">
         <div>
           <span class="eyebrow">SCENARIO TRACKER</span>
@@ -98,9 +103,18 @@
       </div>
 
       <div class="stage-tracker">
-        <h4>진행 단계 · {{ team.progress_step || 1 }}단계 / {{ progressStages.length }}</h4>
-        <div v-if="!progressStages.length" class="empty-state">등록된 진행 단계가 없습니다.</div>
-        <label v-for="stage in progressStages" :key="stage.step_number" class="stage-row card">
+        <h4>
+          진행 단계 · {{ team.progress_step || 1 }}단계 /
+          {{ progressStages.length }}
+        </h4>
+        <div v-if="!progressStages.length" class="empty-state">
+          등록된 진행 단계가 없습니다.
+        </div>
+        <label
+          v-for="stage in progressStages"
+          :key="stage.step_number"
+          class="stage-row card"
+        >
           <input
             type="checkbox"
             :checked="getStageRecord(stage.step_number)?.completed || false"
@@ -112,7 +126,9 @@
             <strong>{{ stage.title }}</strong>
             <small class="muted">{{ stage.description }}</small>
           </span>
-          <span v-if="stageSaving[stage.step_number]" class="muted">저장 중…</span>
+          <span v-if="stageSaving[stage.step_number]" class="muted"
+            >저장 중…</span
+          >
         </label>
       </div>
       <div class="scenario-board">
@@ -160,11 +176,11 @@
     </section>
 
     <!-- 팀 갤러리 -->
-    <section class="section-block">
+    <section v-if="isGM" class="section-block">
       <div class="section-heading">
         <div>
           <span class="eyebrow">TEAM GALLERY</span>
-          <h3 class="section-title">팀 이미지 갤러리</h3>
+          <h3 class="section-title">팀 토큰 갤러리</h3>
         </div>
         <router-link
           :to="{ path: '/gallery', query: { teamId: team.id } }"
@@ -268,8 +284,13 @@
 <script>
 import { updateTeam, deleteTeam } from "@/services/teams";
 import { saveCharacter } from "@/services/characters";
-import { getTeamScenarios, getOrCreateTeamProgressStage, saveTeamScenarioStatus } from "@/services/scenarios";
+import {
+  getTeamScenarios,
+  getOrCreateTeamProgressStage,
+  saveTeamScenarioStatus,
+} from "@/services/scenarios";
 import { getTeamImages } from "@/services/images";
+
 
 export default {
   name: "TeamDetailView",
@@ -285,11 +306,15 @@ export default {
       teamImages: [],
       stageSaving: {},
       imageErrors: {},
+
     };
   },
   computed: {
     team() {
       return this.$store.getters.teamById(this.teamId);
+    },
+    isGM() {
+      return this.$store.state.userRole !== "player";
     },
     scenarios() {
       return this.$store.getters.sortedScenarios;
@@ -300,7 +325,10 @@ export default {
     progressPct() {
       if (!this.progressStages.length) return 0;
       const currentStep = Number(this.team.progress_step) || 1;
-      return Math.min(Math.round((currentStep / this.progressStages.length) * 100), 100);
+      return Math.min(
+        Math.round((currentStep / this.progressStages.length) * 100),
+        100
+      );
     },
   },
   async mounted() {
@@ -332,6 +360,7 @@ export default {
       };
     },
     async loadData() {
+      if (!this.isGM) return;
       try {
         const [ts, imgs] = await Promise.all([
           getTeamScenarios(this.teamId),
@@ -347,7 +376,9 @@ export default {
       return this.teamScenarios.find((ts) => ts.scenario_id === scenarioId);
     },
     getStageRecord(stepNumber) {
-      return this.teamScenarios.find((record) => record.step_number === stepNumber);
+      return this.teamScenarios.find(
+        (record) => record.step_number === stepNumber
+      );
     },
     async handleToggleStage(stage, event) {
       const step = stage.step_number;
@@ -359,14 +390,19 @@ export default {
           completed,
           gmNote: record.gm_note || "",
         });
-        const index = this.teamScenarios.findIndex((item) => item.id === saved.id);
+        const index = this.teamScenarios.findIndex(
+          (item) => item.id === saved.id
+        );
         const records = [...this.teamScenarios];
         if (index < 0) records.push(saved);
         else records.splice(index, 1, { ...records[index], ...saved });
         this.teamScenarios = records;
       } catch (error) {
         event.target.checked = !completed;
-        this.$store.dispatch("showToast", { message: "단계 저장 실패: " + error.message, type: "error" });
+        this.$store.dispatch("showToast", {
+          message: "단계 저장 실패: " + error.message,
+          type: "error",
+        });
       } finally {
         this.stageSaving = { ...this.stageSaving, [step]: false };
       }
@@ -427,7 +463,8 @@ export default {
     async handleAddCharacter() {
       const newChar = {
         team_id: this.teamId,
-        username: "새 캐릭터",
+        username: "",
+        character_name: "새 캐릭터",
         player: "홍길동",
         level: 1,
         race: "인간",
@@ -615,7 +652,9 @@ export default {
   gap: 8px;
   margin-bottom: 24px;
 }
-.stage-tracker h4 { margin: 0 0 4px; }
+.stage-tracker h4 {
+  margin: 0 0 4px;
+}
 .stage-row {
   display: flex;
   align-items: center;
@@ -633,8 +672,14 @@ export default {
   font-weight: 800;
   flex-shrink: 0;
 }
-.stage-copy { display: flex; flex-direction: column; flex: 1; }
-.stage-copy small { font-size: 12px; }
+.stage-copy {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.stage-copy small {
+  font-size: 12px;
+}
 .scenario-row {
   display: flex;
   flex-direction: column;

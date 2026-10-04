@@ -1,0 +1,2 @@
+[functions.player-login]
+verify_jwt = false

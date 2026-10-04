@@ -11,36 +11,37 @@
       </div>
 
       <nav class="side-nav" aria-label="주요 메뉴">
-        <router-link to="/master" class="nav-item">
+        <router-link v-if="isGM" to="/master" class="nav-item">
           <span class="nav-icon">▦</span> 마스터 대시보드
         </router-link>
         <router-link to="/scenarios" class="nav-item">
           <span class="nav-icon">◈</span> 시나리오 트래커
         </router-link>
-        <router-link to="/teams" class="nav-item">
+        <router-link
+          v-if="!isGM && playerTeamId"
+          :to="`/teams/${playerTeamId}`"
+          class="nav-item"
+        >
+          <span class="nav-icon">♙</span> 내 팀 프로필
+        </router-link>
+        <router-link v-if="isGM" to="/teams" class="nav-item">
           <span class="nav-icon">♧</span> 팀 & 캐릭터
         </router-link>
-        <router-link to="/characters" class="nav-item">
+        <router-link v-if="isGM" to="/characters" class="nav-item">
           <span class="nav-icon">☆</span> 캐릭터 목록
         </router-link>
-        <router-link to="/gallery" class="nav-item">
-          <span class="nav-icon">▧</span> 이미지 갤러리
-        </router-link>
-        <div class="nav-divider"></div>
-        <router-link to="/admin/scenarios" class="nav-item nav-admin">
-          <span class="nav-icon">⚙</span> 시나리오 관리
-        </router-link>
-        <router-link to="/admin/scenarios/import" class="nav-item nav-admin">
-          <span class="nav-icon">↑</span> JSON 가져오기
+        <router-link v-if="isGM" to="/gallery" class="nav-item">
+          <span class="nav-icon">▧</span> 토큰 갤러리
         </router-link>
       </nav>
 
       <div class="sidebar-bottom">
-        <button class="side-action" @click="handleExport">
+        <button v-if="isGM" class="side-action" @click="handleExport">
           ↓ <span>전체 백업</span>
         </button>
         <button class="side-action" @click="toggleDark">
-          {{ darkMode ? "☼" : "☾" }} <span>{{ darkMode ? "라이트 모드" : "다크 모드" }}</span>
+          {{ darkMode ? "☼" : "☾" }}
+          <span>{{ darkMode ? "라이트 모드" : "다크 모드" }}</span>
         </button>
         <button class="side-action logout-action" @click="handleLogout">
           → <span>로그아웃</span>
@@ -52,7 +53,9 @@
     <div class="content-shell">
       <header class="topbar">
         <div class="topbar-left">
-          <span class="breadcrumb">DRAGONAGE / GM</span>
+          <span class="breadcrumb"
+            >DRAGONAGE / {{ isGM ? "GM" : "PLAYER" }}</span
+          >
           <h1 class="topbar-title">{{ pageTitle }}</h1>
         </div>
         <div class="topbar-right">
@@ -64,14 +67,24 @@
               @keyup.escape="searchQuery = null"
             />
           </div>
-          <button class="icon-button" title="검색" @click="toggleSearch">🔍</button>
-          <span class="gm-badge">GM</span>
+          <button
+            v-if="isGM"
+            class="icon-button"
+            title="검색"
+            @click="toggleSearch"
+          >
+            🔍
+          </button>
+          <span class="gm-badge">{{ isGM ? "GM" : "PLAYER" }}</span>
           <span v-if="gmEmail" class="gm-email">{{ gmEmail }}</span>
         </div>
       </header>
 
       <!-- 검색 결과 -->
-      <div v-if="searchQuery !== null && searchQuery.length > 1" class="search-overlay">
+      <div
+        v-if="searchQuery !== null && searchQuery.length > 1"
+        class="search-overlay"
+      >
         <SearchResults :query="searchQuery" @close="searchQuery = null" />
       </div>
 
@@ -89,16 +102,19 @@
       <main v-else class="main-content">
         <div v-if="loadErrors.length" class="load-warning" role="alert">
           <strong>일부 서버 데이터를 불러오지 못했습니다.</strong>
-          <ul><li v-for="(item, index) in loadErrors" :key="index">{{ item }}</li></ul>
+          <ul>
+            <li v-for="(item, index) in loadErrors" :key="index">{{ item }}</li>
+          </ul>
           <button class="text-button" @click="retryLoad">다시 불러오기</button>
         </div>
         <!-- 캠페인 없음 안내 -->
         <div v-if="!campaign && !loading" class="no-campaign">
           <h2>캠페인이 없습니다</h2>
           <p>
-            Supabase의 <code>campaigns</code> 테이블에 현재 GM 계정
-            (<code>{{ gmEmail }}</code>)의
-            <code>owner_id</code>로 등록된 캠페인이 없습니다.
+            Supabase의 <code>campaigns</code> 테이블에 현재 GM 계정 (<code>{{
+              gmEmail
+            }}</code
+            >)의 <code>owner_id</code>로 등록된 캠페인이 없습니다.
           </p>
           <button class="primary-button" @click="createFirstCampaign">
             캠페인 생성
@@ -140,9 +156,7 @@ const PAGE_TITLES = {
   "character-detail": "캐릭터 상세",
   scenarios: "시나리오 트래커",
   "scenario-detail": "시나리오 상세",
-  gallery: "이미지 갤러리",
-  "admin-scenarios": "시나리오 관리",
-  "admin-import": "JSON 가져오기",
+  gallery: "토큰 갤러리",
 };
 
 export default {
@@ -174,10 +188,18 @@ export default {
     pageTitle() {
       return PAGE_TITLES[this.$route.name] || "DragonAge GM";
     },
+    isGM() {
+      return this.$store.state.userRole !== "player";
+    },
+    playerTeamId() {
+      return this.$store.state.playerTeamId;
+    },
   },
   async mounted() {
     // 인증 상태 구독
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     if (session?.user) {
       this.$store.commit("setGmUser", session.user);
       await this.loadAll(session.user);
@@ -208,33 +230,84 @@ export default {
       this.$store.commit("setTeams", []);
       this.$store.commit("setScenarios", []);
       this.$store.commit("setProgressStages", []);
+      this.$store.commit("setPlayerContext", null);
+      this.$store.commit("setPlayerStageRecords", []);
       try {
-        const { data: { user: authenticatedUser }, error: authError } = await supabase.auth.getUser();
+        const {
+          data: { user: authenticatedUser },
+          error: authError,
+        } = await supabase.auth.getUser();
         if (authError) throw authError;
         if (!authenticatedUser) throw new Error("GM 로그인이 필요합니다.");
         this.loadedUserId = authenticatedUser.id;
         this.$store.commit("setGmUser", authenticatedUser);
+        const { data: playerContext, error: playerContextError } =
+          await supabase.rpc("player_team_context");
+        if (playerContextError) throw playerContextError;
+        const playerMembership = Array.isArray(playerContext)
+          ? playerContext[0]
+          : null;
+        if (playerMembership) {
+          this.$store.commit("setPlayerContext", playerMembership.team_id);
+          const { data: team, error: teamError } = await supabase
+            .from("teams")
+            .select(
+              "id, name, description, region, color, sort_order, progress_step, total_steps, campaign_id"
+            )
+            .eq("id", playerMembership.team_id)
+            .single();
+          if (teamError) throw teamError;
+          const { data: profiles, error: profileError } = await supabase.rpc(
+            "player_team_profiles"
+          );
+          if (profileError) throw profileError;
+          this.$store.commit("setCampaign", {
+            id: playerMembership.campaign_id,
+            name: "Player",
+          });
+          this.$store.commit("setTeams", [
+            { ...team, characters: profiles || [] },
+          ]);
+          const progressStages = await getProgressStages();
+          this.$store.commit("setProgressStages", progressStages);
+          this.$store.commit("setScenarios", []);
+          if (this.$route.name === "master")
+            this.$router.replace({ name: "scenarios" });
+          return;
+        }
+        this.$store.commit("setPlayerContext", null);
         console.info("[Supabase] GM auth OK", authenticatedUser.id);
 
         const campaigns = await getCampaigns(authenticatedUser.id);
-        console.info("[Supabase] campaigns rows:", campaigns.length, "ids:", campaigns.map((item) => item.id));
+        console.info(
+          "[Supabase] campaigns rows:",
+          campaigns.length,
+          "ids:",
+          campaigns.map((item) => item.id)
+        );
         const campaign = campaigns[0] || null;
         this.$store.commit("setCampaign", campaign);
 
         if (campaign) {
-          const { data: visibleTeamRows, error: visibleTeamsError } = await supabase
-            .from("teams")
-            .select("id, campaign_id")
-            .limit(500);
+          const { data: visibleTeamRows, error: visibleTeamsError } =
+            await supabase.from("teams").select("id, campaign_id").limit(500);
           if (visibleTeamsError) {
-            console.error("[Supabase] TEAMS UNFILTERED ERROR", visibleTeamsError);
+            console.error(
+              "[Supabase] TEAMS UNFILTERED ERROR",
+              visibleTeamsError
+            );
           } else {
             const byCampaign = (visibleTeamRows || []).reduce((counts, row) => {
               const key = row.campaign_id || "<null campaign_id>";
               counts[key] = (counts[key] || 0) + 1;
               return counts;
             }, {});
-            console.info("[Supabase] RLS-visible teams:", visibleTeamRows.length, "team counts by campaign_id:", byCampaign);
+            console.info(
+              "[Supabase] RLS-visible teams:",
+              visibleTeamRows.length,
+              "team counts by campaign_id:",
+              byCampaign
+            );
           }
           // Commit the primary roster before loading secondary resources so one
           // unrelated query failure cannot hide teams and characters.
@@ -242,12 +315,22 @@ export default {
           this.$store.commit("setTeams", teams);
           console.info("[Supabase] teams rows:", teams.length);
           try {
-            const characters = await getCharactersForTeams(teams.map((team) => team.id));
+            const characters = await getCharactersForTeams(
+              teams.map((team) => team.id)
+            );
             const byTeam = new Map(teams.map((team) => [team.id, []]));
-            characters.forEach((character) => byTeam.get(character.team_id)?.push(character));
-            const teamsWithCharacters = teams.map((team) => ({ ...team, characters: byTeam.get(team.id) || [] }));
+            characters.forEach((character) =>
+              byTeam.get(character.team_id)?.push(character)
+            );
+            const teamsWithCharacters = teams.map((team) => ({
+              ...team,
+              characters: byTeam.get(team.id) || [],
+            }));
             this.$store.commit("setTeams", teamsWithCharacters);
-            console.info("[Supabase] users/characters rows:", characters.length);
+            console.info(
+              "[Supabase] users/characters rows:",
+              characters.length
+            );
           } catch (error) {
             console.error("[Supabase] USERS/CHARACTERS ERROR", error);
             this.loadErrors.push(`캐릭터 조회 실패: ${error.message || error}`);
@@ -256,20 +339,41 @@ export default {
           try {
             const scenarios = await getScenarios(campaign.id);
             this.$store.commit("setScenarios", scenarios);
-            console.info("[Supabase] scenarios/questions/choices:", scenarios.length,
-              scenarios.reduce((n, scenario) => n + (scenario.questions || []).length, 0),
-              scenarios.reduce((n, scenario) => n + (scenario.questions || []).reduce((m, question) => m + (question.choices || []).length, 0), 0));
+            console.info(
+              "[Supabase] scenarios/questions/choices:",
+              scenarios.length,
+              scenarios.reduce(
+                (n, scenario) => n + (scenario.questions || []).length,
+                0
+              ),
+              scenarios.reduce(
+                (n, scenario) =>
+                  n +
+                  (scenario.questions || []).reduce(
+                    (m, question) => m + (question.choices || []).length,
+                    0
+                  ),
+                0
+              )
+            );
           } catch (error) {
             console.error("[Supabase] SCENARIOS ERROR", error);
-            this.loadErrors.push(`시나리오 조회 실패: ${error.message || error}`);
+            this.loadErrors.push(
+              `시나리오 조회 실패: ${error.message || error}`
+            );
           }
           try {
             const progressStages = await getProgressStages();
             this.$store.commit("setProgressStages", progressStages);
-            console.info("[Supabase] progress_stages rows:", progressStages.length);
+            console.info(
+              "[Supabase] progress_stages rows:",
+              progressStages.length
+            );
           } catch (error) {
             console.error("[Supabase] PROGRESS_STAGES ERROR", error);
-            this.loadErrors.push(`진행 단계 조회 실패: ${error.message || error}`);
+            this.loadErrors.push(
+              `진행 단계 조회 실패: ${error.message || error}`
+            );
           }
         } else {
           this.$store.commit("setTeams", []);
@@ -289,7 +393,8 @@ export default {
     },
 
     async retryLoad() {
-      if (this.$store.state.gmUser) await this.loadAll(this.$store.state.gmUser);
+      if (this.$store.state.gmUser)
+        await this.loadAll(this.$store.state.gmUser);
     },
 
     async createFirstCampaign() {
@@ -318,6 +423,8 @@ export default {
         this.$store.commit("setCampaign", null);
         this.$store.commit("setTeams", []);
         this.$store.commit("setScenarios", []);
+        this.$store.commit("setPlayerContext", null);
+        this.$store.commit("setPlayerStageRecords", []);
         this.$router.push({ name: "login" });
       } catch (error) {
         this.$store.dispatch("showToast", {
@@ -339,7 +446,9 @@ export default {
         });
         const link = document.createElement("a");
         link.href = URL.createObjectURL(blob);
-        link.download = `dragonage-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        link.download = `dragonage-backup-${new Date()
+          .toISOString()
+          .slice(0, 10)}.json`;
         link.click();
         URL.revokeObjectURL(link.href);
         this.$store.dispatch("showToast", {
@@ -402,11 +511,19 @@ body {
   font-size: 14px;
   line-height: 1.6;
 }
-button, input, textarea, select {
+button,
+input,
+textarea,
+select {
   font: inherit;
 }
-button { cursor: pointer; }
-a { color: inherit; text-decoration: none; }
+button {
+  cursor: pointer;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
 
 /* 공통 버튼 */
 .primary-button {
@@ -418,8 +535,13 @@ a { color: inherit; text-decoration: none; }
   border-radius: 2px;
   transition: background 0.15s;
 }
-.primary-button:hover:not(:disabled) { background: var(--accent-hover); }
-.primary-button:disabled { opacity: 0.5; cursor: not-allowed; }
+.primary-button:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.primary-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 .outline-button {
   background: transparent;
@@ -452,7 +574,9 @@ a { color: inherit; text-decoration: none; }
   font-weight: 600;
   border-radius: 2px;
 }
-.danger-button:hover:not(:disabled) { background: #c04040; }
+.danger-button:hover:not(:disabled) {
+  background: #c04040;
+}
 
 .text-button {
   background: none;
@@ -473,7 +597,9 @@ a { color: inherit; text-decoration: none; }
   border-radius: 4px;
   transition: background 0.1s;
 }
-.icon-button:hover { background: var(--line); }
+.icon-button:hover {
+  background: var(--line);
+}
 
 .delete-button {
   background: none;
@@ -484,7 +610,10 @@ a { color: inherit; text-decoration: none; }
   border-radius: 2px;
   transition: color 0.1s, background 0.1s;
 }
-.delete-button:hover { color: var(--error); background: rgba(224,96,96,0.1); }
+.delete-button:hover {
+  color: var(--error);
+  background: rgba(224, 96, 96, 0.1);
+}
 
 /* 공통 텍스트 */
 .eyebrow {
@@ -494,8 +623,15 @@ a { color: inherit; text-decoration: none; }
   letter-spacing: 0.11em;
   text-transform: uppercase;
 }
-.section-title { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; margin: 0; }
-.muted { color: var(--muted); }
+.section-title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+.muted {
+  color: var(--muted);
+}
 
 /* 공통 폼 */
 .form-label {
@@ -518,7 +654,9 @@ a { color: inherit; text-decoration: none; }
   width: 100%;
   transition: border-color 0.15s;
 }
-.form-input:focus { border-color: var(--accent); }
+.form-input:focus {
+  border-color: var(--accent);
+}
 .form-textarea {
   background: var(--paper);
   border: 1px solid var(--line);
@@ -531,7 +669,9 @@ a { color: inherit; text-decoration: none; }
   resize: vertical;
   transition: border-color 0.15s;
 }
-.form-textarea:focus { border-color: var(--accent); }
+.form-textarea:focus {
+  border-color: var(--accent);
+}
 
 /* 진행바 */
 .progress-bar {
@@ -555,9 +695,18 @@ a { color: inherit; text-decoration: none; }
   font-weight: 700;
   letter-spacing: 0.05em;
 }
-.badge-success { background: rgba(74,159,110,0.15); color: var(--success); }
-.badge-muted { background: var(--line); color: var(--muted); }
-.badge-accent { background: rgba(201,121,84,0.15); color: var(--accent); }
+.badge-success {
+  background: rgba(74, 159, 110, 0.15);
+  color: var(--success);
+}
+.badge-muted {
+  background: var(--line);
+  color: var(--muted);
+}
+.badge-accent {
+  background: rgba(201, 121, 84, 0.15);
+  color: var(--accent);
+}
 
 /* 카드 */
 .card {
@@ -616,7 +765,10 @@ a { color: inherit; text-decoration: none; }
   border-radius: 2px;
   flex-shrink: 0;
 }
-.brand b { display: block; font-size: 14px; }
+.brand b {
+  display: block;
+  font-size: 14px;
+}
 .brand small {
   display: block;
   color: #969baa;
@@ -642,13 +794,34 @@ a { color: inherit; text-decoration: none; }
   transition: background 0.1s, color 0.1s;
   text-decoration: none;
 }
-.nav-item:hover { color: #fff; background: #2d3245; }
-.nav-item.router-link-active { color: #fff; background: #313746; }
-.nav-item.router-link-active .nav-icon { color: #d78a65; }
-.nav-icon { width: 16px; text-align: center; font-size: 14px; }
-.nav-divider { height: 1px; background: #2e3448; margin: 8px 0; }
-.nav-admin { font-size: 12px; }
-.sidebar-bottom { margin-top: auto; padding-top: 12px; }
+.nav-item:hover {
+  color: #fff;
+  background: #2d3245;
+}
+.nav-item.router-link-active {
+  color: #fff;
+  background: #313746;
+}
+.nav-item.router-link-active .nav-icon {
+  color: #d78a65;
+}
+.nav-icon {
+  width: 16px;
+  text-align: center;
+  font-size: 14px;
+}
+.nav-divider {
+  height: 1px;
+  background: #2e3448;
+  margin: 8px 0;
+}
+.nav-admin {
+  font-size: 12px;
+}
+.sidebar-bottom {
+  margin-top: auto;
+  padding-top: 12px;
+}
 .side-action {
   display: flex;
   align-items: center;
@@ -663,8 +836,13 @@ a { color: inherit; text-decoration: none; }
   text-align: left;
   transition: color 0.1s, background 0.1s;
 }
-.side-action:hover { color: #fff; background: #2d3245; }
-.logout-action:hover { color: #e06060; }
+.side-action:hover {
+  color: #fff;
+  background: #2d3245;
+}
+.logout-action:hover {
+  color: #e06060;
+}
 
 /* 컨텐츠 */
 .content-shell {
@@ -711,7 +889,10 @@ a { color: inherit; text-decoration: none; }
   padding: 3px 7px;
   border-radius: 2px;
 }
-.gm-email { font-size: 12px; color: var(--muted); }
+.gm-email {
+  font-size: 12px;
+  color: var(--muted);
+}
 .search-wrap {
   position: relative;
 }
@@ -725,7 +906,9 @@ a { color: inherit; text-decoration: none; }
   outline: none;
   font-size: 13px;
 }
-.search-input:focus { border-color: var(--accent); }
+.search-input:focus {
+  border-color: var(--accent);
+}
 
 .main-content {
   flex: 1;
@@ -748,15 +931,24 @@ a { color: inherit; text-decoration: none; }
   border-radius: 4px;
   background: rgba(224, 160, 80, 0.08);
 }
-.load-warning ul { margin: 8px 0; padding-left: 20px; }
+.load-warning ul {
+  margin: 8px 0;
+  padding-left: 20px;
+}
 
 .no-campaign {
   max-width: 480px;
   margin: 60px auto;
   text-align: center;
 }
-.no-campaign h2 { margin-bottom: 12px; }
-.no-campaign p { color: var(--muted); margin-bottom: 24px; line-height: 1.8; }
+.no-campaign h2 {
+  margin-bottom: 12px;
+}
+.no-campaign p {
+  color: var(--muted);
+  margin-bottom: 24px;
+  line-height: 1.8;
+}
 .no-campaign code {
   background: var(--line);
   padding: 2px 6px;
@@ -774,7 +966,7 @@ a { color: inherit; text-decoration: none; }
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 4px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
   overflow-y: auto;
 }
 
@@ -790,21 +982,62 @@ a { color: inherit; text-decoration: none; }
   z-index: 1000;
   max-width: 360px;
 }
-.toast--success { background: #1a3a28; color: #6fcf97; border: 1px solid #4a9f6e; }
-.toast--error { background: #3a1a1a; color: #f06060; border: 1px solid #e06060; }
-.toast--warning { background: #3a2a1a; color: #f0a050; border: 1px solid #e0a050; }
-.toast-enter-from, .toast-leave-to { opacity: 0; transform: translateY(12px); }
-.toast-enter-active, .toast-leave-active { transition: all 0.25s; }
+.toast--success {
+  background: #1a3a28;
+  color: #6fcf97;
+  border: 1px solid #4a9f6e;
+}
+.toast--error {
+  background: #3a1a1a;
+  color: #f06060;
+  border: 1px solid #e06060;
+}
+.toast--warning {
+  background: #3a2a1a;
+  color: #f0a050;
+  border: 1px solid #e0a050;
+}
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateY(12px);
+}
+.toast-enter-active,
+.toast-leave-active {
+  transition: all 0.25s;
+}
 
 /* 반응형 */
 @media (max-width: 768px) {
-  .sidebar { width: 100%; height: auto; position: static; flex-direction: row; flex-wrap: wrap; }
-  .brand { padding-bottom: 0; }
-  .side-nav { flex-direction: row; flex-wrap: wrap; }
-  .sidebar-bottom { display: none; }
-  .main-content { padding: 16px; }
-  .topbar { padding: 12px 16px; }
-  .gm-email { display: none; }
-  .search-overlay { right: 0; width: calc(100vw - 32px); }
+  .sidebar {
+    width: 100%;
+    height: auto;
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .brand {
+    padding-bottom: 0;
+  }
+  .side-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .sidebar-bottom {
+    display: none;
+  }
+  .main-content {
+    padding: 16px;
+  }
+  .topbar {
+    padding: 12px 16px;
+  }
+  .gm-email {
+    display: none;
+  }
+  .search-overlay {
+    right: 0;
+    width: calc(100vw - 32px);
+  }
 }
 </style>

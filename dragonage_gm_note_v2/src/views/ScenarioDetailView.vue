@@ -12,7 +12,7 @@
     </div>
 
     <!-- 팀 선택 탭 -->
-    <form class="question-add-panel card" @submit.prevent="handleAddQuestion">
+    <form v-if="isGM" class="question-add-panel card" @submit.prevent="handleAddQuestion">
       <div>
         <h3>이 단계에 질문 추가</h3>
         <p class="muted">질문과 선택지는 서버에 저장되며 마스터의 선택 비교에도 표시됩니다.</p>
@@ -52,7 +52,7 @@
             <span class="muted">{{ selectedTeam.region || '지역 미정' }}</span>
           </div>
         </div>
-        <div class="status-toggle">
+        <div v-if="isGM" class="status-toggle">
           <label class="check-label">
             <input
               type="checkbox"
@@ -120,7 +120,7 @@
         </button>
       </div>
 
-      <div class="gm-note-section">
+      <div v-if="isGM" class="gm-note-section">
         <label class="form-label">
           GM 전용 메모 (해당 팀 × 시나리오 플레이 기록)
           <textarea
@@ -147,6 +147,7 @@ import {
   getProgressStageWithQuestions,
   addProgressStageQuestion,
   saveTeamScenarioStatus,
+  saveTeamScenarioNote,
   saveTeamScenarioAnswer,
 } from "@/services/scenarios";
 
@@ -170,6 +171,7 @@ export default {
     };
   },
   computed: {
+    isGM() { return this.$store.state.userRole !== "player"; },
     teams() { return this.$store.getters.sortedTeams; },
     selectedTeam() {
       return this.teams.find((t) => t.id === this.selectedTeamId);
@@ -300,10 +302,7 @@ export default {
       if (!this.currentRecord) return;
       this.savingNote = true;
       try {
-        const updated = await saveTeamScenarioStatus(this.currentRecord.id, {
-          completed: this.currentRecord.completed,
-          gmNote: this.gmNoteInput,
-        });
+        const updated = await saveTeamScenarioNote(this.currentRecord.id, this.gmNoteInput);
         this.teamRecordMap[this.selectedTeamId] = {
           ...this.currentRecord,
           gm_note: updated.gm_note,
