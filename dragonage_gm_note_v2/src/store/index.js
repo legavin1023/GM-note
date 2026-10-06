@@ -40,9 +40,13 @@ export default createStore({
       state.scenarios.find((s) => s.id === id) || null,
     // 팀 이름순 or sort_order 기준 정렬
     sortedTeams: (state) =>
-      [...state.teams].sort(
-        (a, b) => (a.sort_order || 0) - (b.sort_order || 0)
-      ),
+      [...state.teams]
+        .filter(
+          (team) =>
+            team.is_frozen !== true ||
+            (state.userRole === "gm" && !state.gmPlayerPreviewMode)
+        )
+        .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)),
     // 시나리오 sort_order 기준 정렬
     sortedScenarios: (state) =>
       [...state.scenarios].sort(

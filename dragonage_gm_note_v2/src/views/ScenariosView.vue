@@ -102,6 +102,35 @@
           >
             주요 NPC 보기 →
           </router-link>
+          <div
+            v-if="selectedNpcs.length"
+            class="scenario-npc-shortcuts"
+            aria-label="주요 NPC 바로가기"
+          >
+            <!-- <span class="scenario-npc-shortcuts-label">NPC 바로가기</span> -->
+            <router-link
+              v-for="npc in selectedNpcs"
+              :key="npc.id"
+              class="scenario-npc-token-link"
+              :to="{ name: 'npc-feedback', params: { npcId: npc.id } }"
+              :title="`${npc.name} 평점과 댓글 보기`"
+              :aria-label="`${npc.name} 평점과 댓글 보기`"
+            >
+              <img
+                v-if="npc.token_url"
+                :src="npc.token_url"
+                :alt="npc.name"
+                loading="lazy"
+              />
+              <span
+                v-else
+                class="scenario-npc-token-placeholder"
+                aria-hidden="true"
+              >
+                {{ npc.name.slice(0, 1) }}
+              </span>
+            </router-link>
+          </div>
         </div>
 
         <div class="questions-block">
@@ -180,6 +209,7 @@
             >
               <span class="team-dot" :style="{ background: team.color }"></span>
               <span>{{ team.name }}</span>
+              <span v-if="team.is_frozen" class="badge badge-muted">보류</span>
               <span
                 :class="[
                   'badge',
@@ -209,6 +239,7 @@ import {
   uniqueProgressStages,
 } from "@/services/scenarios";
 import { getProgressStages, setProgressStageActive } from "@/services/teams";
+import { supabase } from "@/supabase";
 
 export default {
   name: "ScenariosView",
@@ -220,6 +251,7 @@ export default {
       scenarioSelectionRequestId: 0,
       recordsError: null,
       stageQuestions: [],
+      scenarioNpcs: [],
       stageQuestionsError: null,
       updatingStageIds: {},
     };
@@ -254,14 +286,25 @@ export default {
       return this.sortedTeams.find((team) => team.id === this.playerTeamId);
     },
     sortedTeams() {
-      const teams = this.$store.getters.sortedTeams;
+      const teams = this.$store.state.teams;
       // Player RLS exposes teams in the same campaign, while tracker queries
       // expose only completed records. Keep the full team list for comparison.
-      return teams;
+      return [...teams].sort(
+        (a, b) => (a.sort_order || 0) - (b.sort_order || 0)
+      );
     },
     selected() {
       return (
         this.scenarios.find((s) => s.id === String(this.selectedId)) || null
+      );
+    },
+    campaignId() {
+      return this.$store.getters.campaignId;
+    },
+    selectedNpcs() {
+      if (!this.selected) return [];
+      return this.scenarioNpcs.filter(
+        (npc) => Number(npc.scenario_step) === Number(this.selected.step_number)
       );
     },
   },
@@ -285,9 +328,13 @@ export default {
       if (this.isGM) this.loadStageQuestions();
       else this.refreshPlayerTracker();
     },
+    campaignId() {
+      this.loadScenarioNpcs();
+    },
   },
   mounted() {
     this.loadStageQuestions();
+    this.loadScenarioNpcs();
     if (!this.isGM) this.refreshPlayerTracker();
     if (this.scenarios.length) this.selectScenario(this.scenarios[0]);
   },
@@ -314,6 +361,19 @@ export default {
       } catch (error) {
         this.stageQuestionsError = error.message || String(error);
       }
+    },
+    async loadScenarioNpcs() {
+      if (!this.campaignId) {
+        this.scenarioNpcs = [];
+        return;
+      }
+      const { data, error } = await supabase
+        .from("scenario_npcs")
+        .select("id, scenario_step, name, token_url")
+        .eq("campaign_id", this.campaignId)
+        .order("scenario_step", { ascending: true })
+        .order("name", { ascending: true });
+      this.scenarioNpcs = error ? [] : data || [];
     },
     async toggleStageActive(scenario) {
       if (!this.isGM || !scenario) return;
@@ -378,6 +438,45 @@ export default {
   display: inline-block;
   margin: 12px 0 0 8px;
   text-decoration: none;
+}
+.scenario-npc-shortcuts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.scenario-npc-shortcuts-label {
+  margin-right: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.scenario-npc-token-link {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--paper);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.scenario-npc-token-link:hover,
+.scenario-npc-token-link:focus-visible {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+.scenario-npc-token-link img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.scenario-npc-token-placeholder {
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 700;
 }
 .scenario-record-link:hover,
 .scenario-record-link:focus-visible {

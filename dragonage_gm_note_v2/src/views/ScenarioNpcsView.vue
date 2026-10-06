@@ -116,6 +116,9 @@
             <span v-if="npc.gender">{{ npc.gender }}</span>
             <span v-if="!npc.age && !npc.gender">정보 없음</span>
           </p>
+          <p class="npc-rating-summary">
+            {{ ratingLabel(npc.id) }}
+          </p>
           <router-link
             class="primary-button npc-feedback-link"
             :to="{ name: 'npc-feedback', params: { npcId: npc.id } }"
@@ -143,6 +146,7 @@
 
 <script>
 import { supabase } from "@/supabase";
+import { formatNpcRating, getNpcRatingSummaries } from "@/services/npcRatings";
 
 const emptyDraft = () => ({ name: "", age: "", gender: "", token_url: "" });
 const ALLOWED_IMAGE_TYPES = [
@@ -158,6 +162,8 @@ export default {
   data() {
     return {
       npcs: [],
+      ratingSummaries: {},
+      ratingsError: "",
       draft: emptyDraft(),
       editingId: null,
       deletingId: null,
@@ -235,8 +241,24 @@ export default {
         .eq("scenario_step", this.scenarioStep)
         .order("name", { ascending: true });
       if (error) this.error = `NPC를 불러오지 못했습니다: ${error.message}`;
-      else this.npcs = data || [];
+      else {
+        this.npcs = data || [];
+        try {
+          this.ratingSummaries = await getNpcRatingSummaries(
+            this.npcs.map((npc) => npc.id)
+          );
+          this.ratingsError = "";
+        } catch (ratingError) {
+          this.ratingSummaries = {};
+          this.ratingsError = ratingError.message;
+        }
+      }
       this.loading = false;
+    },
+    ratingLabel(npcId) {
+      return this.ratingsError
+        ? "평점 확인 불가"
+        : formatNpcRating(this.ratingSummaries[npcId]);
     },
     async saveNpc() {
       if (!this.isGM || this.saving) return;
@@ -483,6 +505,12 @@ export default {
   min-height: 22px;
   color: var(--muted);
   font-size: 13px;
+}
+.npc-rating-summary {
+  margin: 0 0 12px;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
 }
 .npc-feedback-link {
   display: inline-block;

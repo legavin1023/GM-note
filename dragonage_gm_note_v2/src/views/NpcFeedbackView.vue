@@ -37,6 +37,10 @@
         :class="{ 'preview-disabled-panel': isPlayerPreview }"
       >
         <h3>NPC 평점</h3>
+        <p class="rating-summary rating-summary--panel">
+          현재 평균 {{ averageRating }} / 5
+          <span>({{ ratings.length }}명 평가)</span>
+        </p>
         <div class="rating-buttons" role="radiogroup" aria-label="NPC 평점">
           <button
             v-for="score in 5"
@@ -95,8 +99,25 @@
           class="npc-comment"
         >
           <header>
-            <strong>{{ comment.nickname }}</strong
-            ><time :datetime="comment.created_at">{{
+            <div class="npc-comment-author">
+              <img
+                class="npc-comment-avatar"
+                :src="commentAvatar(comment)"
+                :alt="`${
+                  comment.author_character_name ||
+                  commentAuthor(comment.nickname)
+                } 인장`"
+                @error="useDefaultAvatar"
+              />
+              <div class="npc-comment-author-names">
+                <strong>{{
+                  comment.author_character_name ||
+                  commentAuthor(comment.nickname)
+                }}</strong>
+                <span>{{ comment.author_player_name || "플레이어" }}</span>
+              </div>
+            </div>
+            <time :datetime="comment.created_at">{{
               formatDate(comment.created_at)
             }}</time>
           </header>
@@ -109,6 +130,8 @@
 
 <script>
 import { supabase } from "@/supabase";
+
+const DEFAULT_AVATAR = `${process.env.BASE_URL}image/default.webp`;
 
 export default {
   name: "NpcFeedbackView",
@@ -196,7 +219,9 @@ export default {
           .eq("npc_id", npc.id),
         supabase
           .from("scenario_npc_comments")
-          .select("id, nickname, content, created_at")
+          .select(
+            "id, nickname, author_player_name, author_character_name, author_token_url, content, created_at"
+          )
           .eq("npc_id", npc.id)
           .order("created_at", { ascending: false }),
       ]);
@@ -275,6 +300,19 @@ export default {
         timeStyle: "short",
       });
     },
+    commentAuthor(nickname) {
+      // Older rows may contain the synthetic Auth email local-part.
+      return /^player-[0-9a-f-]{36}$/i.test(nickname || "")
+        ? "플레이어"
+        : nickname || "사용자";
+    },
+    commentAvatar(comment) {
+      return comment.author_token_url || DEFAULT_AVATAR;
+    },
+    useDefaultAvatar(event) {
+      event.target.onerror = null;
+      event.target.src = DEFAULT_AVATAR;
+    },
   },
 };
 </script>
@@ -319,6 +357,9 @@ export default {
   color: var(--accent);
   font-weight: 700;
 }
+.rating-summary--panel {
+  margin: 0 0 12px;
+}
 .rating-summary span {
   color: var(--muted);
   font-size: 12px;
@@ -359,22 +400,84 @@ export default {
   padding: 16px;
 }
 .npc-comment {
-  padding: 14px 0;
-  border-top: 1px solid var(--line);
+  margin-top: 12px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 92%, var(--paper));
 }
 .npc-comment header {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
   font-size: 12px;
 }
-.npc-comment time {
+.npc-comment-author {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+.npc-comment-avatar {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--paper);
+}
+.npc-comment-author-names {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.npc-comment strong {
+  min-width: 0;
+  color: var(--text);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.npc-comment-author-names span {
   color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.npc-comment time {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
 }
 .npc-comment p {
-  margin: 8px 0 0;
+  margin: 14px 0 0 55px;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.65;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+@media (max-width: 560px) {
+  .npc-comment {
+    padding: 13px;
+  }
+  .npc-comment header {
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .npc-comment-avatar {
+    width: 38px;
+    height: 38px;
+    flex-basis: 38px;
+  }
+  .npc-comment p {
+    margin: 12px 0 0;
+  }
+  .npc-comment time {
+    text-align: left;
+  }
 }
 .field-error {
   color: var(--error);

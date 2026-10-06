@@ -31,14 +31,15 @@
     <form v-if="canWrite" class="note-composer" @submit.prevent="saveNote">
       <div v-if="mode === 'scenario'" class="note-form-grid">
         <label class="form-label">
-          작성 캐릭터
+          작성자
           <select
             v-if="isGM"
             v-model="authorCharacterId"
             class="form-input"
             required
           >
-            <option value="" disabled>캐릭터 선택</option>
+            <option value="" disabled>작성자 선택</option>
+            <option v-if="isGM" value="__gm__">마스터 (GM)</option>
             <option
               v-for="character in teamCharacters"
               :key="character.id"
@@ -66,9 +67,10 @@
         </label>
       </div>
       <label v-if="mode !== 'scenario' && isGM" class="form-label">
-        작성 캐릭터
+        작성자
         <select v-model="authorCharacterId" class="form-input" required>
-          <option value="" disabled>캐릭터 선택</option>
+          <option value="" disabled>작성자 선택</option>
+          <option v-if="isGM" value="__gm__">마스터 (GM)</option>
           <option
             v-for="character in teamCharacters"
             :key="character.id"
@@ -331,7 +333,9 @@ export default {
         const characterIds = characters.map((character) => character.id);
         if (!characterIds.includes(this.authorCharacterId)) {
           this.authorCharacterId =
-            this.$store.state.playerCharacterId || characters[0]?.id || "";
+            this.isGM
+              ? "__gm__"
+              : this.$store.state.playerCharacterId || characters[0]?.id || "";
         }
         if (!characterIds.includes(this.targetDraftId))
           this.targetDraftId = characters[0]?.id || "";
@@ -405,6 +409,8 @@ export default {
         ? this.authorCharacterId
         : playerCharacterId;
       if (!authorCharacterId) return;
+      const storedAuthorCharacterId =
+        this.isGM && authorCharacterId === "__gm__" ? null : authorCharacterId;
       this.saving = true;
       this.errorMessage = "";
       try {
@@ -419,7 +425,7 @@ export default {
               ? Number(this.scenarioId)
               : null,
             author_user_id: this.currentUserId,
-            author_character_id: authorCharacterId,
+            author_character_id: storedAuthorCharacterId,
             target_character_id: this.targetDraftId,
             is_public: this.publicDraft,
             show_author: this.showAuthorDraft,
@@ -432,7 +438,7 @@ export default {
                 ? this.targetDraftId
                 : this.targetCharacterId,
             author_user_id: this.currentUserId,
-            author_character_id: authorCharacterId,
+            author_character_id: storedAuthorCharacterId,
             note_date: this.dateDraft || null,
             visibility: this.visibilityDraft,
             scenario_id: this.relatedScenarioId || null,
@@ -474,7 +480,8 @@ export default {
     beginEdit(note) {
       this.editingId = note.id;
       this.draftContent = note.content;
-      this.authorCharacterId = note.author_character_id;
+      this.authorCharacterId =
+        note.author_character_id || (this.isGM ? "__gm__" : "");
       if (this.mode === "scenario") {
         this.targetDraftId = note.target_character_id;
         this.publicDraft = note.is_public;
@@ -512,7 +519,7 @@ export default {
     },
     noteAuthor(note) {
       if (this.mode === "scenario" && !note.show_author) return "익명 캐릭터";
-      return this.characterName(note.author_character_id);
+      return note.author_character_name || this.characterName(note.author_character_id);
     },
     scenarioName(id) {
       return this.scenarios.find((item) => item.id === id)?.title || "시나리오";

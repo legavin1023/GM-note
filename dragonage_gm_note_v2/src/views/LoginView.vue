@@ -208,6 +208,10 @@ export default {
       this.playerEmailsLoading = true;
       try {
         this.playerUsernames = await getPlayerLoginUsernames();
+        if (!this.username && this.playerUsernames.length) {
+          this.username = this.playerUsernames[0];
+          await this.handleUsernameChange();
+        }
       } catch (error) {
         this.errorMessage =
           "플레이어 계정 목록을 불러오지 못했습니다: " +
@@ -388,6 +392,12 @@ label select:focus {
   background: rgba(169, 75, 85, 0.12);
   border: 1px solid rgba(169, 75, 85, 0.35);
   border-radius: 2px;
+}
+.login-hint {
+  color: #e8e8e8;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
 }
 .login-button {
   background: #a94b55;

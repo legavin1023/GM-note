@@ -94,6 +94,7 @@
             <span class="img-date muted">{{
               scenarioTitle(npc.scenario_step)
             }}</span>
+            <span class="npc-gallery-rating">{{ ratingLabel(npc.id) }}</span>
             <span class="npc-rate-link">평점과 댓글 보기 →</span>
           </div>
         </router-link>
@@ -242,6 +243,7 @@ import {
   uploadGalleryImage,
 } from "@/services/images";
 import { supabase } from "@/supabase";
+import { formatNpcRating, getNpcRatingSummaries } from "@/services/npcRatings";
 
 export default {
   name: "GalleryView",
@@ -249,6 +251,8 @@ export default {
     return {
       images: [],
       scenarioNpcs: [],
+      npcRatingSummaries: {},
+      npcRatingsError: "",
       npcsLoading: false,
       npcsError: null,
       imagesLoading: false,
@@ -347,8 +351,24 @@ export default {
       if (error) {
         this.scenarioNpcs = [];
         this.npcsError = error.message;
-      } else this.scenarioNpcs = data || [];
+      } else {
+        this.scenarioNpcs = data || [];
+        try {
+          this.npcRatingSummaries = await getNpcRatingSummaries(
+            this.scenarioNpcs.map((npc) => npc.id)
+          );
+          this.npcRatingsError = "";
+        } catch (ratingError) {
+          this.npcRatingSummaries = {};
+          this.npcRatingsError = ratingError.message;
+        }
+      }
       this.npcsLoading = false;
+    },
+    ratingLabel(npcId) {
+      return this.npcRatingsError
+        ? "평점 확인 불가"
+        : formatNpcRating(this.npcRatingSummaries[npcId]);
     },
     scenarioTitle(stepNumber) {
       const stage = (this.$store.state.progressStages || []).find(
@@ -579,6 +599,12 @@ export default {
   margin-top: 8px;
   color: var(--accent);
   font-size: 12px;
+}
+.npc-gallery-rating {
+  margin-top: 5px;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
 }
 .img-wrapper {
   position: relative;

@@ -49,7 +49,7 @@
           전체 글
         </button>
         <button
-          v-for="team in teams"
+          v-for="team in visibleBoardTeams"
           :key="team.id"
           type="button"
           role="tab"
@@ -107,12 +107,19 @@
             :disabled="posting"
           >
             <option value="" disabled>팀을 선택하세요</option>
-            <option v-for="team in teams" :key="team.id" :value="team.id">
+            <option
+              v-for="team in visibleBoardTeams"
+              :key="team.id"
+              :value="team.id"
+            >
               {{ team.name }}
             </option>
           </select>
         </label>
-        <label v-if="canManageBoard" class="spoiler-toggle">
+        <label
+          v-if="canManageBoard && selectedTeamId !== '__master__'"
+          class="spoiler-toggle"
+        >
           <input
             v-model="postIsMasterArtwork"
             type="checkbox"
@@ -120,6 +127,9 @@
           />
           마스터 관련 작품으로 등록
         </label>
+        <p v-else-if="canManageBoard" class="team-scope-label">
+          Master artwork · Author: {{ authorInfo.nickname }}
+        </p>
         <p v-else class="team-scope-label">
           내 팀: {{ playerTeamName || "팀 정보 없음" }}
         </p>
@@ -134,23 +144,44 @@
         />
         <div class="form-label tag-picker-label">
           <label for="post-character-tag">언급할 캐릭터</label>
-          <select
-            id="post-character-tag"
-            v-model="tagCharacterToAdd"
-            class="form-select"
-            :disabled="posting"
-            aria-label="게시글에 태그할 캐릭터 선택"
-          >
-            <option value="">캐릭터를 선택하세요</option>
-            <option
-              v-for="character in availableCharacters"
-              :key="character.id"
-              :value="character.id"
-              :disabled="postCharacterTags.includes(character.id)"
+          <div class="tag-character-picker" @focusout="closeTagPicker">
+            <input
+              id="post-character-tag"
+              v-model="tagSearchQuery"
+              class="form-select"
+              type="search"
+              autocomplete="off"
+              placeholder="캐릭터 검색"
+              :disabled="posting"
+              role="combobox"
+              aria-label="게시글에 태그할 캐릭터 검색 및 선택"
+              aria-controls="post-character-tag-options"
+              :aria-expanded="tagPickerOpen"
+              @focus="tagPickerOpen = true"
+            />
+            <div
+              v-if="tagPickerOpen"
+              id="post-character-tag-options"
+              class="tag-character-options"
+              role="listbox"
             >
-              {{ tagOptionLabel(character) }}
-            </option>
-          </select>
+              <button
+                v-for="character in filteredTagCharacters"
+                :key="character.id"
+                type="button"
+                role="option"
+                :aria-selected="tagCharacterToAdd === character.id"
+                :disabled="postCharacterTags.includes(character.id)"
+                @mousedown.prevent
+                @click="selectTagCharacter(character)"
+              >
+                {{ tagOptionLabel(character) }}
+              </button>
+              <span v-if="!filteredTagCharacters.length" class="tag-no-results">
+                검색 결과가 없습니다.
+              </span>
+            </div>
+          </div>
           <button
             class="outline-button"
             type="button"
@@ -475,8 +506,12 @@
               />
               <div class="comment-body">
                 <div class="comment-meta">
-                  <strong>{{ comment.nickname || "사용자" }}</strong
-                  ><time :datetime="comment.created_at">{{
+                  <strong>{{
+                    comment.is_gm
+                      ? comment.nickname || "마스터"
+                      : comment.player_name || comment.nickname || "사용자"
+                  }}</strong>
+                  <time :datetime="comment.created_at">{{
                     formatDate(comment.created_at)
                   }}</time>
                 </div>
@@ -643,6 +678,8 @@ export default {
       postIsMasterArtwork: false,
       postCharacterTags: [],
       tagCharacterToAdd: "",
+      tagSearchQuery: "",
+      tagPickerOpen: false,
       revealedSpoilers: {},
       playerTeamId: "",
       taggedCharacterIds: [],
@@ -663,6 +700,11 @@ export default {
     },
     canManageBoard() {
       return this.isAdmin && !this.playerViewMode;
+    },
+    visibleBoardTeams() {
+      return this.canManageBoard
+        ? this.teams
+        : this.teams.filter((team) => !team.is_frozen);
     },
     selectedTeamName() {
       if (this.selectedTeamId === "__master__") return "마스터 뇌물";
@@ -731,6 +773,13 @@ export default {
         (character) => character.team_id === teamId
       );
     },
+    filteredTagCharacters() {
+      const query = this.tagSearchQuery.trim().toLocaleLowerCase();
+      if (!query) return this.availableCharacters;
+      return this.availableCharacters.filter((character) =>
+        this.tagOptionLabel(character).toLocaleLowerCase().includes(query)
+      );
+    },
   },
   async mounted() {
     await this.initialize();
@@ -760,7 +809,7 @@ export default {
       this.selectedTeamId =
         requestedTeam === "__master__"
           ? "__master__"
-          : this.teams.some((team) => team.id === requestedTeam)
+          : this.visibleBoardTeams.some((team) => team.id === requestedTeam)
           ? requestedTeam
           : "";
       if (this.user) this.loadPosts();
@@ -804,13 +853,15 @@ export default {
         const previewTeamId = this.$store.getters.activePlayerTeamId;
         this.selectedTeamId =
           this.playerViewMode &&
-          !this.teams.some((team) => team.id === requestedTeam)
+          !this.visibleBoardTeams.some((team) => team.id === requestedTeam)
             ? ""
             : requestedTeam === "__master__"
             ? "__master__"
-            : this.teams.some((team) => team.id === requestedTeam)
+            : this.visibleBoardTeams.some((team) => team.id === requestedTeam)
             ? requestedTeam
             : "";
+        this.postIsMasterArtwork =
+          this.canManageBoard && this.selectedTeamId === "__master__";
         this.playerTeamId = previewTeamId || "";
         this.postTeamId = this.playerViewMode
           ? previewTeamId
@@ -830,9 +881,11 @@ export default {
         this.selectedTeamId =
           requestedTeam === "__master__"
             ? "__master__"
-            : this.teams.some((team) => team.id === requestedTeam)
+            : this.visibleBoardTeams.some((team) => team.id === requestedTeam)
             ? requestedTeam
             : "";
+        this.postIsMasterArtwork =
+          this.canManageBoard && this.selectedTeamId === "__master__";
         this.postTeamId = this.playerTeamId;
       }
       await this.loadPosts();
@@ -840,6 +893,8 @@ export default {
     selectTeam(teamId) {
       if (this.selectedTeamId === teamId && !this.$route.query.postId) return;
       this.selectedTeamId = teamId;
+      this.postIsMasterArtwork = this.canManageBoard && teamId === "__master__";
+      if (this.postIsMasterArtwork) this.postTeamId = "";
       this.offset = 0;
       if (this.$route.query.postId) {
         const query = {
@@ -854,6 +909,16 @@ export default {
         return;
       }
       this.loadPosts();
+    },
+    selectTagCharacter(character) {
+      this.tagCharacterToAdd = character.id;
+      this.tagSearchQuery = this.tagOptionLabel(character);
+      this.tagPickerOpen = false;
+    },
+    closeTagPicker(event) {
+      if (!event.currentTarget.contains(event.relatedTarget)) {
+        this.tagPickerOpen = false;
+      }
     },
     async loadPosts(append = false) {
       this.loading = true;
@@ -904,6 +969,9 @@ export default {
           const comments = await Promise.all(
             (post.team_art_comments || []).map(async (comment) => ({
               ...comment,
+              nickname: this.authorDisplayName(comment, tokenUrls),
+              player_name: this.authorPlayerName(comment, tokenUrls),
+              is_gm: Boolean(tokenUrls[comment.user_id]?.is_gm),
               avatar_url: this.authorAvatar(comment, tokenUrls),
               image_url: comment.image_path
                 ? await this.signedUrl(comment.image_path)
@@ -912,6 +980,8 @@ export default {
           );
           return {
             ...post,
+            nickname: this.authorDisplayName(post, tokenUrls),
+            player_name: this.authorPlayerName(post, tokenUrls),
             avatar_url: this.authorAvatar(post, tokenUrls),
             assignmentDraft: post.team_id || "",
             character_tags: post.character_tags || [],
@@ -954,11 +1024,30 @@ export default {
       });
       if (error) {
         console.warn("[FreeBoard] author token images unavailable", error);
-        return {};
       }
-      return Object.fromEntries(
+      const profiles = Object.fromEntries(
         (data || []).map((profile) => [profile.user_id, profile])
       );
+      const { data: names, error: namesError } = await supabase.rpc(
+        "team_art_author_display_names",
+        { p_user_ids: userIds }
+      );
+      if (!namesError) {
+        (names || []).forEach((name) => {
+          profiles[name.user_id] = { ...profiles[name.user_id], ...name };
+        });
+      }
+      return profiles;
+    },
+    authorDisplayName(author, profiles) {
+      const profile = profiles[author.user_id];
+      if (profile?.character_name) return profile.character_name;
+      if (/^player-[0-9a-f-]{36}$/i.test(author.nickname || ""))
+        return profile?.is_gm ? "마스터" : "플레이어";
+      return author.nickname || "사용자";
+    },
+    authorPlayerName(author, profiles) {
+      return profiles[author.user_id]?.player_name || "";
     },
     authorAvatar(author, tokenUrls) {
       const profile = tokenUrls[author.user_id];
@@ -1094,12 +1183,14 @@ export default {
       if (!id || this.postCharacterTags.includes(id)) return;
       this.postCharacterTags = [...this.postCharacterTags, id];
       this.tagCharacterToAdd = "";
+      this.tagSearchQuery = "";
     },
     addAllTeamTags() {
       this.postCharacterTags = this.postingTeamCharacters.map(
         (character) => character.id
       );
       this.tagCharacterToAdd = "";
+      this.tagSearchQuery = "";
     },
     removePostTag(id) {
       this.postCharacterTags = this.postCharacterTags.filter(
@@ -1336,9 +1427,12 @@ export default {
         this.postFiles = [];
         this.postContent = "";
         this.postIsSpoiler = false;
-        this.postIsMasterArtwork = false;
+        this.postIsMasterArtwork =
+          this.canManageBoard && this.selectedTeamId === "__master__";
         this.postCharacterTags = [];
         this.tagCharacterToAdd = "";
+        this.tagSearchQuery = "";
+        this.tagPickerOpen = false;
         this.composerOpen = false;
         await this.loadPosts();
       } catch (error) {
@@ -1393,14 +1487,18 @@ export default {
         if (error) throw error;
         const comment = {
           ...data,
-          avatar_url: this.authorAvatar(
-            data,
-            await this.loadAuthorTokenUrls([data])
-          ),
+          nickname: "",
+          player_name: "",
+          avatar_url: "",
           image_url: data.image_path
             ? await this.signedUrl(data.image_path)
             : "",
         };
+        const profiles = await this.loadAuthorTokenUrls([data]);
+        comment.nickname = this.authorDisplayName(data, profiles);
+        comment.player_name = this.authorPlayerName(data, profiles);
+        comment.is_gm = Boolean(profiles[data.user_id]?.is_gm);
+        comment.avatar_url = this.authorAvatar(data, profiles);
         const target = this.posts.find((item) => item.id === post.id);
         target.comments = [...(target.comments || []), comment].sort(
           (a, b) => new Date(a.created_at) - new Date(b.created_at)
@@ -1618,11 +1716,56 @@ export default {
 .tag-picker-label > label {
   flex: 0 0 100%;
 }
-.tag-picker-label select {
+.tag-character-picker {
+  position: relative;
   width: min(320px, calc(100% - 100px));
   min-width: 0;
   min-height: 38px;
   flex: 0 1 320px;
+}
+.tag-character-picker > input {
+  width: 100%;
+  min-height: 38px;
+}
+.tag-character-options {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 100%;
+  max-height: 180px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 8px 20px rgb(0 0 0 / 16%);
+}
+.tag-character-options > button {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.tag-character-options > button:hover:not(:disabled),
+.tag-character-options > button[aria-selected="true"] {
+  background: var(--accent-soft);
+}
+.tag-character-options > button:disabled {
+  color: var(--muted);
+  opacity: 0.55;
+}
+.tag-no-results {
+  display: block;
+  padding: 10px;
+  color: var(--muted);
+  font-size: 13px;
 }
 .tag-picker-label > button {
   min-height: 38px;
@@ -2190,7 +2333,7 @@ time {
     padding: 7px 10px;
     font-size: 12px;
   }
-  .tag-picker-label select {
+  .tag-character-picker {
     width: auto;
     flex: 1 1 0;
   }

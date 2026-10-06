@@ -29,7 +29,7 @@ export async function getTeam(teamId) {
     .select(
       `
       id, name, description, region, color, sort_order,
-      progress_step, total_steps, campaign_id, created_at,
+      progress_step, total_steps, campaign_id, created_at, is_frozen,
       users(
         id, team_id, username, character_name, player, token_url, level,
         age, height, weight, race, background, social_class, class,
@@ -90,6 +90,7 @@ export async function updateTeam(teamId, updates) {
     "sort_order",
     "progress_step",
     "total_steps",
+    "is_frozen",
   ];
   const payload = Object.fromEntries(
     Object.entries(updates).filter(([k]) => allowed.includes(k))

@@ -1,5 +1,5 @@
 <template>
-  <div v-if="team" class="team-detail-view">
+  <div v-if="team && (isGM || !team.is_frozen)" class="team-detail-view">
     <!-- 상단 헤더 -->
     <div class="team-header-card card">
       <div class="team-header-top">
@@ -17,6 +17,16 @@
           <p class="muted">{{ team.description || "설명이 없습니다." }}</p>
         </div>
         <div v-if="isGM" class="team-header-actions">
+          <span v-if="team.is_frozen" class="team-frozen-badge">보류 중</span>
+          <button
+            class="outline-button"
+            :disabled="freezeSaving"
+            @click="toggleTeamFrozen"
+          >
+            {{
+              freezeSaving ? "처리 중…" : team.is_frozen ? "팀 재개" : "팀 보류"
+            }}
+          </button>
           <button class="outline-button" @click="showEditModal = true">
             팀 정보 수정
           </button>
@@ -725,6 +735,9 @@
       </div>
     </article>
   </section>
+  <div v-if="team && team.is_frozen && !isGM" class="empty-state">
+    이 팀은 현재 마스터가 보류했습니다.
+  </div>
 </template>
 
 <script>
@@ -765,6 +778,7 @@ export default {
     return {
       showEditModal: false,
       saving: false,
+      freezeSaving: false,
       editForm: {},
       teamScenarios: [],
       teamImages: [],
@@ -1335,6 +1349,36 @@ export default {
         this.saving = false;
       }
     },
+    async toggleTeamFrozen() {
+      if (this.freezeSaving) return;
+      const nextValue = !this.team.is_frozen;
+      const action = nextValue ? "보류" : "재개";
+      if (
+        !confirm(
+          `'${this.team.name}' 팀을 ${action}할까요? 시나리오 기록은 계속 표시됩니다.`
+        )
+      ) {
+        return;
+      }
+      this.freezeSaving = true;
+      try {
+        const updated = await updateTeam(this.teamId, { is_frozen: nextValue });
+        this.$store.commit("updateTeam", { ...this.team, ...updated });
+        this.$store.dispatch("showToast", {
+          message: nextValue
+            ? "팀을 보류했습니다."
+            : "팀을 다시 활성화했습니다.",
+          type: "success",
+        });
+      } catch (error) {
+        this.$store.dispatch("showToast", {
+          message: `팀 상태 변경 실패: ${error.message}`,
+          type: "error",
+        });
+      } finally {
+        this.freezeSaving = false;
+      }
+    },
     async handleDeleteTeam() {
       if (
         !confirm(
@@ -1445,8 +1489,18 @@ export default {
 }
 .team-header-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
   flex-shrink: 0;
+}
+.team-frozen-badge {
+  padding: 4px 9px;
+  border: 1px solid #d9a441;
+  border-radius: 999px;
+  color: #9a6500;
+  background: #fff7df;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .team-header-stats {

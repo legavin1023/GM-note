@@ -255,7 +255,9 @@ export default {
             gmProfile?.username?.trim() ||
             userData.user.user_metadata?.username ||
             "마스터";
-          this.teams = this.$store.state.teams || [];
+          this.teams = (this.$store.state.teams || []).filter(
+            (team) => !this.isPlayerPreview || !team.is_frozen
+          );
           if (this.isPlayerPreview) {
             this.teamId = this.$store.getters.activePlayerTeamId || "";
             const previewTeam = this.teams.find(
@@ -286,7 +288,9 @@ export default {
             ownProfile?.character_name ||
             ownProfile?.player ||
             this.displayName;
-          this.teams = this.$store.state.teams || [];
+          this.teams = (this.$store.state.teams || []).filter(
+            (team) => !team.is_frozen
+          );
         }
       } catch (error) {
         console.error("[Home] authentication context", error);
@@ -359,6 +363,15 @@ export default {
             (data || []).map((profile) => [profile.user_id, profile])
           );
         }
+        const { data: names, error: namesError } = await supabase.rpc(
+          "team_art_author_display_names",
+          { p_user_ids: userIds }
+        );
+        if (!namesError) {
+          (names || []).forEach((name) => {
+            profiles[name.user_id] = { ...profiles[name.user_id], ...name };
+          });
+        }
       }
       return rows.map((row) => {
         const profile = profiles[row.user_id];
@@ -366,11 +379,18 @@ export default {
           profile?.is_gm || (this.isGM && row.user_id === this.userId);
         return {
           ...row,
+          nickname: this.authorDisplayName(row, profile),
           avatar_url: isMaster
             ? DEFAULT_AVATAR
             : profile?.token_url || row.avatar_url || DEFAULT_AVATAR,
         };
       });
+    },
+    authorDisplayName(author, profile) {
+      if (profile?.character_name) return profile.character_name;
+      if (/^player-[0-9a-f-]{36}$/i.test(author.nickname || ""))
+        return profile?.is_gm ? "마스터" : "플레이어";
+      return author.nickname || "사용자";
     },
     postLink(teamId) {
       return this.isGM

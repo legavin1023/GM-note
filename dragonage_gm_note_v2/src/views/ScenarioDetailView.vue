@@ -241,7 +241,9 @@ export default {
       return this.$store.getters.isPlayerPreview;
     },
     teams() {
-      return this.$store.getters.sortedTeams;
+      return [...this.$store.state.teams].sort(
+        (a, b) => (a.sort_order || 0) - (b.sort_order || 0)
+      );
     },
     selectedTeam() {
       return this.teams.find((t) => t.id === this.selectedTeamId);

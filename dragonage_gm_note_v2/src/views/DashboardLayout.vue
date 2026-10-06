@@ -27,7 +27,7 @@
           <span class="nav-icon">◈</span> 시나리오
         </router-link>
         <router-link
-          v-if="(!isGM && playerTeamId) || (isPlayerPreview && playerTeamId)"
+          v-if="playerTeamId && !activePlayerTeamFrozen"
           :to="`/teams/${playerTeamId}`"
           class="nav-item nav-my-team"
         >
@@ -414,6 +414,12 @@ export default {
     playerTeamId() {
       return this.$store.getters.activePlayerTeamId;
     },
+    activePlayerTeamFrozen() {
+      return Boolean(
+        this.$store.state.teams.find((team) => team.id === this.playerTeamId)
+          ?.is_frozen
+      );
+    },
     sortedTeams() {
       return this.$store.getters.sortedTeams;
     },
@@ -470,7 +476,8 @@ export default {
         if (ownPostsResult.error) throw ownPostsResult.error;
 
         const ownPosts = ownPostsResult.data || [];
-        let commentNotifications = [];
+        const taggedPosts = taggedResult.data || [];
+        let commentsForLookup = [];
         if (ownPosts.length) {
           const postIds = ownPosts.map((post) => post.id);
           const { data: comments, error } = await supabase
@@ -481,23 +488,41 @@ export default {
             .order("created_at", { ascending: false })
             .limit(20);
           if (error) throw error;
-          const postsById = Object.fromEntries(
-            ownPosts.map((post) => [post.id, post])
-          );
-          commentNotifications = (comments || []).map((comment) => ({
-            id: `comment-${comment.id}`,
-            kind: "comment",
-            actor: comment.nickname || "사용자",
-            preview: comment.content || "이미지 댓글을 남겼습니다.",
-            createdAt: comment.created_at,
-            postId: comment.post_id,
-            teamId: postsById[comment.post_id]?.team_id || "",
-          }));
+          commentsForLookup = comments || [];
         }
-        const tagNotifications = (taggedResult.data || []).map((post) => ({
+        const allAuthors = [...taggedPosts, ...commentsForLookup];
+        const authorIds = [
+          ...new Set(allAuthors.map((row) => row.user_id).filter(Boolean)),
+        ];
+        let authorNames = {};
+        if (authorIds.length) {
+          const { data: names, error: namesError } = await supabase.rpc(
+            "team_art_author_display_names",
+            { p_user_ids: authorIds }
+          );
+          if (namesError) {
+            console.warn("Artwork notification names unavailable", namesError);
+          } else {
+            authorNames = Object.fromEntries(
+              (names || []).map((profile) => [profile.user_id, profile])
+            );
+          }
+        }
+        // Resolve names before composing the notification rows.
+        const commentNotifications = commentsForLookup.map((comment) => ({
+          id: `comment-${comment.id}`,
+          kind: "comment",
+          actor: this.boardCommentAuthor(comment, authorNames),
+          preview: comment.content || "이미지 댓글을 남겼습니다.",
+          createdAt: comment.created_at,
+          postId: comment.post_id,
+          teamId:
+            ownPosts.find((post) => post.id === comment.post_id)?.team_id || "",
+        }));
+        const tagNotifications = taggedPosts.map((post) => ({
           id: `tag-${post.id}`,
           kind: "tag",
-          actor: post.nickname || "사용자",
+          actor: this.boardCommentAuthor(post, authorNames),
           preview: post.content || "작품에서 내 캐릭터를 태그했습니다.",
           createdAt: post.created_at,
           postId: post.id,
@@ -517,6 +542,12 @@ export default {
       } finally {
         this.notificationsLoading = false;
       }
+    },
+    boardCommentAuthor(row, authorNames) {
+      const profile = authorNames[row.user_id] || {};
+      if (profile?.character_name) return profile.character_name;
+      if (/^player-[0-9a-f-]{36}$/i.test(row.nickname || "")) return "플레이어";
+      return row.nickname || "사용자";
     },
     toggleNotifications() {
       this.notificationsOpen = !this.notificationsOpen;
@@ -611,7 +642,7 @@ export default {
             await supabase
               .from("teams")
               .select(
-                "id, name, description, region, color, sort_order, progress_step, total_steps, campaign_id"
+                "id, name, description, region, color, sort_order, progress_step, total_steps, campaign_id, is_frozen"
               )
               .eq("campaign_id", playerMembership.campaign_id)
               .order("sort_order", { ascending: true });
@@ -855,36 +886,36 @@ export default {
 <style>
 @import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap");
 :root {
-  --ink: #202020;
-  --muted: #696969;
-  --line: #dedede;
-  --paper: #f3f3f1;
-  --panel: #fff;
-  --accent: #a94b55;
-  --accent-hover: #8f3d47;
+  --ink: #292621;
+  --muted: #77736c;
+  --line: #e6dfd7;
+  --paper: #f6f3ef;
+  --panel: #fffdfb;
+  --accent: #9d5c61;
+  --accent-hover: #82484e;
   --accent-foreground: #fff;
-  --accent-soft: rgba(169, 75, 85, 0.12);
-  --navy: #171717;
-  --nav-text: #f5f5f5;
-  --nav-muted: #b8b8b8;
-  --nav-hover: #292929;
-  --nav-active: #373737;
-  --nav-divider: #3b3b3b;
-  --nav-accent: #d8878e;
+  --accent-soft: rgba(157, 92, 97, 0.12);
+  --navy: #282522;
+  --nav-text: #faf8f5;
+  --nav-muted: #c2bbb2;
+  --nav-hover: #38332f;
+  --nav-active: #413936;
+  --nav-divider: #45403b;
+  --nav-accent: #d9a2a2;
   --success: #4a9f6e;
   --error: #c62828;
   --warning: #a85b00;
 }
 .dark-mode {
-  --ink: #ededed;
-  --muted: #b0b0b0;
-  --line: #383838;
-  --paper: #111;
-  --panel: #1d1d1d;
-  --accent: #d47b83;
-  --accent-hover: #bf6972;
-  --accent-foreground: #171717;
-  --accent-soft: rgba(212, 123, 131, 0.16);
+  --ink: #f1ece5;
+  --muted: #b9b1a8;
+  --line: #3d3833;
+  --paper: #181614;
+  --panel: #24211e;
+  --accent: #d89599;
+  --accent-hover: #e4a6aa;
+  --accent-foreground: #241f1d;
+  --accent-soft: rgba(216, 149, 153, 0.16);
   --error: #ff6b6b;
   --warning: #f0ae58;
 }
@@ -895,7 +926,7 @@ body {
   margin: 0;
   background: var(--paper);
   color: var(--ink);
-  font-family: "Manrope", sans-serif;
+  font-family: "Manrope", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
 }
 a {
   color: inherit;
@@ -905,18 +936,24 @@ a {
   color: var(--accent-foreground);
   border: none;
   padding: 10px 18px;
+  border-radius: 8px;
   font-weight: 700;
   cursor: pointer;
+  transition: background 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
 }
 .primary-button:hover {
   background: var(--accent-hover);
+  box-shadow: 0 5px 14px color-mix(in srgb, var(--accent) 20%, transparent);
+  transform: translateY(-1px);
 }
 .outline-button {
   border: 1px solid var(--accent);
   color: var(--accent);
   background: transparent;
   padding: 9px 16px;
+  border-radius: 8px;
   cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
 }
 .outline-button:hover:not(:disabled) {
   background: var(--accent);
@@ -927,6 +964,7 @@ a {
   color: var(--ink);
   background: var(--panel);
   padding: 9px 16px;
+  border-radius: 8px;
   cursor: pointer;
 }
 .text-button {
@@ -945,8 +983,9 @@ a {
 .card {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 12px;
   padding: 20px;
+  box-shadow: 0 5px 18px rgb(42 34 28 / 4%);
 }
 .form-label {
   display: flex;
@@ -959,7 +998,7 @@ a {
 .form-select,
 .form-textarea {
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: 8px;
   background: var(--panel);
   color: var(--ink);
   padding: 9px 11px;
@@ -1078,12 +1117,12 @@ a {
   position: sticky;
   top: 0;
   align-self: flex-start;
-  width: 220px;
+  width: 236px;
   height: 100vh;
   flex-shrink: 0;
   background: var(--navy);
   color: var(--nav-text);
-  padding: 24px 14px 20px;
+  padding: 25px 15px 20px;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -1103,7 +1142,7 @@ a {
   background: var(--accent);
   color: var(--accent-foreground);
   font: 600 11px "DM Mono", monospace;
-  border-radius: 2px;
+  border-radius: 9px;
   flex-shrink: 0;
 }
 .brand b {
@@ -1120,7 +1159,7 @@ a {
 .side-nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 5px;
 }
 .side-nav .nav-home {
   order: 1;
@@ -1153,20 +1192,28 @@ a {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px;
+  position: relative;
+  min-height: 42px;
+  padding: 10px 12px;
   color: var(--nav-muted);
-  border-radius: 4px;
+  border-radius: 9px;
   font-size: 13px;
-  transition: background 0.1s, color 0.1s;
+  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease;
   text-decoration: none;
 }
 .nav-item:hover {
   color: var(--nav-text);
   background: var(--nav-hover);
+  transform: translateX(2px);
 }
 .nav-item.router-link-active {
   color: var(--nav-text);
-  background: var(--nav-active);
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--nav-accent) 16%, var(--nav-active)),
+    var(--nav-active)
+  );
+  box-shadow: inset 3px 0 0 var(--nav-accent);
 }
 .nav-item.router-link-active .nav-icon {
   color: var(--nav-accent);
@@ -1219,9 +1266,10 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 14px 28px;
+  padding: 15px 30px;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
+  box-shadow: 0 4px 16px rgb(42 34 28 / 3%);
 }
 .topbar-left,
 .topbar-right {
@@ -1243,8 +1291,9 @@ a {
 .topbar-title {
   margin: 0;
   color: var(--ink);
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: -0.035em;
 }
 .search-wrap {
   position: relative;
@@ -1435,8 +1484,9 @@ a {
 }
 .main-content {
   flex: 1;
-  padding: 28px;
+  padding: 30px 32px;
   overflow-y: auto;
+  background: var(--paper);
 }
 .tracker-reminder-ad {
   position: relative;
@@ -1617,7 +1667,7 @@ a {
   .main-content {
     min-width: 0;
     overflow: visible;
-    padding: 16px 14px calc(76px + env(safe-area-inset-bottom));
+    padding: 18px 14px calc(76px + env(safe-area-inset-bottom));
   }
   .preview-banner {
     margin: 0 12px;

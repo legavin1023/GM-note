@@ -46,6 +46,8 @@ AS $$
   ORDER BY u.created_at NULLS LAST
   LIMIT 1
 $$;
+ALTER FUNCTION public.player_team_context() OWNER TO postgres;
+ALTER FUNCTION public.player_team_context() SET row_security = off;
 REVOKE ALL ON FUNCTION public.player_team_context() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.player_team_context() TO authenticated;
 

@@ -237,9 +237,18 @@
             <div class="activity-title">{{ item.title }}</div>
             <div class="activity-sub muted">{{ item.sub }}</div>
           </div>
+          <span class="activity-actor" :class="`activity-actor--${item.actorType}`">
+            {{ item.actorLabel }}
+          </span>
           <span class="activity-time muted">{{ item.time }}</span>
         </div>
-        <div v-if="!recentActivity.length" class="empty-state">
+        <div v-if="activityLoading" class="empty-state">
+          최근 활동을 불러오는 중…
+        </div>
+        <div v-else-if="activityError" class="empty-state" role="alert">
+          최근 활동을 불러오지 못했습니다: {{ activityError }}
+        </div>
+        <div v-else-if="!recentActivity.length" class="empty-state">
           최근 활동이 없습니다.
         </div>
       </div>
@@ -263,6 +272,10 @@ export default {
       loadingRecords: true,
       recordsError: null,
       progressError: null,
+      activityLogs: [],
+      activityLoading: true,
+      activityError: "",
+      activityChannel: null,
     };
   },
   computed: {
@@ -309,38 +322,35 @@ export default {
       return Math.round(total / this.teams.length);
     },
     recentActivity() {
-      const items = [];
-      for (const team of this.teams) {
-        for (const char of team.characters || []) {
-          if (char.updated_at) {
-            items.push({
-              key: "char-" + char.id,
-              title: `캐릭터 "${char.character_name || "이름 없음"}" 수정`,
-              sub: team.name,
-              time: this.formatTime(char.updated_at),
-              color: team.color,
-              ts: new Date(char.updated_at).getTime(),
-            });
-          }
-        }
-      }
-      for (const scenarioId in this.allTeamRecords) {
-        for (const record of this.allTeamRecords[scenarioId] || []) {
-          if (record.updated_at) {
-            const team = this.teams.find((t) => t.id === record.team_id);
-            const scenario = this.scenarios.find((s) => s.id === scenarioId);
-            items.push({
-              key: "ts-" + record.id,
-              title: `${scenario?.code || ""} 시나리오 기록 업데이트`,
-              sub: team?.name || "",
-              time: this.formatTime(record.updated_at),
-              color: team?.color || "#b42332",
-              ts: new Date(record.updated_at).getTime(),
-            });
-          }
-        }
-      }
-      return items.sort((a, b) => b.ts - a.ts).slice(0, 10);
+      return this.activityLogs.map((log) => {
+        const operationLabel = {
+          INSERT: "등록",
+          UPDATE: "수정",
+          DELETE: "삭제",
+        }[log.operation] || "변경";
+        const team = this.teams.find((item) => item.id === log.team_id);
+        return {
+          key: log.id,
+          title: `${log.feature} ${operationLabel}`,
+          sub: [log.actor_label, log.entity_label, team?.name]
+            .filter(Boolean)
+            .join(" · "),
+          actorType: log.actor_type,
+          actorLabel:
+            log.actor_type === "master"
+              ? "마스터 · 내 작업"
+              : log.actor_type === "player"
+              ? "플레이어 작업"
+              : "사용자 작업",
+          time: this.formatTime(log.created_at),
+          color:
+            log.actor_type === "master"
+              ? "#d47b83"
+              : log.actor_type === "player"
+              ? "#6887bb"
+              : "#999",
+        };
+      });
     },
   },
   mounted() {
@@ -364,12 +374,25 @@ export default {
         () => this.loadAllRecords()
       );
     this.recordsChannel.subscribe();
+    this.activityChannel = this.$supabase
+      .channel(`master-activity-${this._uid}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "app_activity_logs" },
+        () => this.loadRecentActivity()
+      );
+    this.activityChannel.subscribe();
+    this.loadRecentActivity();
     this.loadAllRecords();
   },
   beforeUnmount() {
     if (this.recordsChannel) {
       this.$supabase.removeChannel(this.recordsChannel);
       this.recordsChannel = null;
+    }
+    if (this.activityChannel) {
+      this.$supabase.removeChannel(this.activityChannel);
+      this.activityChannel = null;
     }
   },
   watch: {
@@ -387,6 +410,25 @@ export default {
     },
   },
   methods: {
+    async loadRecentActivity() {
+      this.activityLoading = true;
+      this.activityError = "";
+      const { data, error } = await this.$supabase
+        .from("app_activity_logs")
+        .select(
+          "id, actor_type, actor_label, feature, operation, entity_label, team_id, created_at"
+        )
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .limit(20);
+      if (error) {
+        this.activityLogs = [];
+        this.activityError = error.message;
+      } else {
+        this.activityLogs = data || [];
+      }
+      this.activityLoading = false;
+    },
     async loadAllRecords() {
       this.loadingRecords = true;
       this.recordsError = null;
@@ -528,18 +570,32 @@ export default {
 .master-view {
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 24px;
 }
 .metric-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+  gap: 14px;
 }
 .metric-card {
-  background: var(--panel);
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(145deg, var(--panel), color-mix(in srgb, var(--paper) 72%, var(--panel)));
   border: 1px solid var(--line);
-  padding: 20px;
-  border-radius: 4px;
+  padding: 22px;
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgb(42 34 28 / 5%);
+}
+.metric-card::after {
+  position: absolute;
+  right: -24px;
+  bottom: -34px;
+  width: 100px;
+  height: 100px;
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, transparent);
+  border-radius: 50%;
+  content: "";
+  pointer-events: none;
 }
 .metric-card strong {
   display: block;
@@ -560,7 +616,8 @@ export default {
   color: var(--muted);
 }
 .accent-card {
-  border-color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--line));
+  background: linear-gradient(145deg, var(--accent-soft), var(--panel) 74%);
 }
 .accent-card strong {
   color: var(--accent);
@@ -569,8 +626,9 @@ export default {
 .section-block {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 24px;
+  border-radius: 14px;
+  padding: 25px;
+  box-shadow: 0 7px 24px rgb(42 34 28 / 4%);
 }
 
 .team-progress-grid {
@@ -583,14 +641,15 @@ export default {
   background: var(--paper);
   border: 1px solid var(--line);
   padding: 16px;
-  border-radius: 4px;
+  border-radius: 10px;
   text-decoration: none;
   color: var(--ink);
-  transition: border-color 0.15s, transform 0.1s;
+  transition: border-color 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
 }
 .team-progress-card:hover {
   border-color: var(--accent);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgb(42 34 28 / 8%);
 }
 .tpc-head {
   display: flex;
@@ -689,8 +748,11 @@ export default {
   text-align: left;
   vertical-align: top;
 }
+.compare-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--accent) 4%, var(--panel));
+}
 .compare-table th {
-  background: var(--paper);
+  background: color-mix(in srgb, var(--paper) 88%, var(--accent-soft));
   font-weight: 600;
   font-size: 12px;
 }
@@ -797,8 +859,12 @@ export default {
 }
 .activity-item {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--paper) 64%, var(--panel));
 }
 .activity-dot {
   width: 8px;
@@ -810,6 +876,7 @@ export default {
 .activity-title {
   font-size: 14px;
   font-weight: 600;
+  letter-spacing: -0.01em;
 }
 .activity-sub {
   font-size: 12px;
@@ -818,6 +885,26 @@ export default {
   margin-left: auto;
   font-size: 12px;
   flex-shrink: 0;
+}
+.activity-actor {
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.activity-actor--master {
+  color: #d47b83;
+  background: rgba(212, 123, 131, 0.12);
+}
+.activity-actor--player {
+  color: #6887bb;
+  background: rgba(104, 135, 187, 0.12);
+}
+.activity-actor--user {
+  color: var(--muted);
+  background: var(--surface);
 }
 
 .empty-state {
@@ -842,6 +929,29 @@ export default {
 @media (max-width: 600px) {
   .metric-row {
     grid-template-columns: 1fr 1fr;
+  }
+  .metric-card {
+    padding: 16px;
+  }
+  .metric-card strong {
+    font-size: 28px;
+  }
+  .section-block {
+    padding: 16px;
+  }
+  .activity-item {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 7px 10px;
+  }
+  .activity-item > div {
+    flex: 1 1 calc(100% - 28px);
+  }
+  .activity-actor {
+    margin-left: 20px;
+  }
+  .activity-time {
+    margin-left: auto;
   }
 }
 </style>
