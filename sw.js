@@ -14,17 +14,24 @@ self.addEventListener("push", (event) => {
   const base = self.registration.scope;
   event.waitUntil(
     self.registration.showNotification(
-      payload.kind === "comment"
-        ? "💬 내 글에 댓글이 달렸어요"
-        : "🔔 새 게시글이 올라왔어요",
+      {
+        comment: "💬 내 글에 댓글이 달렸어요",
+        notice: "📢 새 공지가 올라왔어요",
+        session: "⏰ 세션 시작 10분 전이에요",
+        activity: "📋 새 최근활동이 있어요",
+      }[payload.kind] || "🔔 새 게시글이 올라왔어요",
       {
         body: String(payload.body || "새 작품 게시글").slice(0, 240),
         icon: new URL("icons/icon-192.png", base).href,
         badge: new URL("icons/icon-192.png", base).href,
         tag: payload.eventId
-          ? `${payload.kind === "comment" ? "comment" : "post"}-${
-              payload.eventId
-            }`
+          ? `${
+              ["comment", "notice", "session", "activity"].includes(
+                payload.kind
+              )
+                ? payload.kind
+                : "post"
+            }-${payload.eventId}`
           : payload.postId
           ? `post-${payload.postId}`
           : "new-post",
