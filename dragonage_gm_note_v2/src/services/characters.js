@@ -25,27 +25,27 @@ export async function getCharactersForTeams(teamIds) {
 const CHARACTER_FIELDS = [
   "id",
   "team_id",
-  "username",       // 로그인 아이디
+  "username", // 로그인 아이디
   "character_name", // 캐릭터 이름
-  "player",         // PL 이름
-  "token_url",      // 토큰 이미지 URL
-  "level",          // 레벨
-  "age",            // 나이
-  "height",         // 키
-  "weight",         // 몸무게
-  "race",           // 종족
-  "background",     // 배경
-  "social_class",   // 사회 계층
-  "class",          // 클래스
-  "motivation",     // 동기
-  "goal",           // 목표
-  "strengths",      // 장점
-  "doom",           // 파멸
-  "languages",      // 언어
-  "traits",         // 특징
-  "character_quirk",// 건지
-  "biography",      // 캐릭터 소개
-  "gm_secret",      // GM 비밀 메모
+  "player", // PL 이름
+  "token_url", // 토큰 이미지 URL
+  "level", // 레벨
+  "age", // 나이
+  "height", // 키
+  "weight", // 몸무게
+  "race", // 종족
+  "background", // 배경
+  "social_class", // 사회 계층
+  "class", // 클래스
+  "motivation", // 동기
+  "goal", // 목표
+  "strengths", // 장점
+  "doom", // 파멸
+  "languages", // 언어
+  "traits", // 특징
+  "character_quirk", // 건지
+  "biography", // 캐릭터 소개
+  "gm_secret", // GM 비밀 메모
   "player_gm_secret",
   "gm_core_belief",
   "gm_regret",
@@ -62,7 +62,10 @@ const CHARACTER_FIELDS = [
 export async function getCharactersByTeam(teamId) {
   const { data, error } = await supabase
     .from("users")
-    .select(CHARACTER_FIELDS.filter((f) => f !== "id" && f !== "team_id").join(", ") + ", id, team_id, updated_at")
+    .select(
+      CHARACTER_FIELDS.filter((f) => f !== "id" && f !== "team_id").join(", ") +
+        ", id, team_id, updated_at"
+    )
     .eq("team_id", teamId)
     .order("created_at", { ascending: true });
 
@@ -90,9 +93,7 @@ export async function getCharacter(characterId) {
 export async function getAllCharacters(campaignId) {
   const { data, error } = await supabase
     .from("users")
-    .select(
-      `*, teams!inner(id, name, color, campaign_id)`
-    )
+    .select(`*, teams!inner(id, name, color, campaign_id)`)
     .eq("teams.campaign_id", campaignId)
     .order("created_at", { ascending: true });
 
@@ -122,7 +123,9 @@ export async function saveCharacter(character) {
     .maybeSingle();
   if (teamError) throw teamError;
   if (!visibleTeam) {
-    throw new Error("선택한 팀에 접근할 수 없습니다. 현재 캠페인에 속한 팀을 선택하세요.");
+    throw new Error(
+      "선택한 팀에 접근할 수 없습니다. 현재 캠페인에 속한 팀을 선택하세요."
+    );
   }
 
   if (!payload.id) {
@@ -143,10 +146,7 @@ export async function saveCharacter(character) {
  * 캐릭터 삭제
  */
 export async function deleteCharacter(characterId) {
-  const { error } = await supabase
-    .from("users")
-    .delete()
-    .eq("id", characterId);
+  const { error } = await supabase.from("users").delete().eq("id", characterId);
 
   if (error) throw error;
 }
@@ -156,7 +156,13 @@ export async function deleteCharacter(characterId) {
  * Storage 버킷: campaign-assets
  * 경로: teams/{team_id}/characters/{character_id}/{filename}
  */
-export async function uploadTokenImage(file, teamId, characterId, campaignId, ownerLabel = "") {
+export async function uploadTokenImage(
+  file,
+  teamId,
+  characterId,
+  campaignId,
+  ownerLabel = ""
+) {
   const ext = file.name.split(".").pop();
   const path = `teams/${teamId}/characters/${characterId}/tokens/${Date.now()}.${ext}`;
 
@@ -173,14 +179,24 @@ export async function uploadTokenImage(file, teamId, characterId, campaignId, ow
     if (fallbackError) throw fallbackError;
 
     const { data } = supabase.storage.from("post-images").getPublicUrl(path);
-    await registerTokenImage({ campaignId, teamId, characterId, url: data.publicUrl, ownerLabel });
+    await registerTokenImage({
+      campaignId,
+      teamId,
+      characterId,
+      url: data.publicUrl,
+      ownerLabel,
+    });
     return data.publicUrl;
   }
 
-  const { data } = supabase.storage
-    .from("campaign-assets")
-    .getPublicUrl(path);
-  await registerTokenImage({ campaignId, teamId, characterId, url: data.publicUrl, ownerLabel });
+  const { data } = supabase.storage.from("campaign-assets").getPublicUrl(path);
+  await registerTokenImage({
+    campaignId,
+    teamId,
+    characterId,
+    url: data.publicUrl,
+    ownerLabel,
+  });
   return data.publicUrl;
 }
 
@@ -195,7 +211,13 @@ export async function getTokenImageHistory(characterId) {
   return data || [];
 }
 
-async function registerTokenImage({ campaignId, teamId, characterId, url, ownerLabel }) {
+async function registerTokenImage({
+  campaignId,
+  teamId,
+  characterId,
+  url,
+  ownerLabel,
+}) {
   const { error } = await supabase.from("images").insert({
     campaign_id: campaignId || null,
     team_id: teamId || null,

@@ -7,6 +7,9 @@ export default createStore({
     gmUser: null,
     userRole: null,
     playerTeamId: null,
+    playerCharacterId: null,
+    gmPlayerPreviewMode: false,
+    gmPreviewTeamId: null,
     playerStageRecords: [],
     // 현재 캠페인
     campaign: null,
@@ -23,13 +26,23 @@ export default createStore({
 
   getters: {
     isAuthenticated: (state) => Boolean(state.gmUser),
+    isMaster: (state) => state.userRole === "gm",
+    isPlayerPreview: (state) =>
+      state.userRole === "gm" && state.gmPlayerPreviewMode,
+    isGM: (state) => state.userRole === "gm" && !state.gmPlayerPreviewMode,
+    activePlayerTeamId: (state) =>
+      state.userRole === "gm" && state.gmPlayerPreviewMode
+        ? state.gmPreviewTeamId
+        : state.playerTeamId,
     campaignId: (state) => state.campaign?.id || null,
     teamById: (state) => (id) => state.teams.find((t) => t.id === id) || null,
     scenarioById: (state) => (id) =>
       state.scenarios.find((s) => s.id === id) || null,
     // 팀 이름순 or sort_order 기준 정렬
     sortedTeams: (state) =>
-      [...state.teams].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)),
+      [...state.teams].sort(
+        (a, b) => (a.sort_order || 0) - (b.sort_order || 0)
+      ),
     // 시나리오 sort_order 기준 정렬
     sortedScenarios: (state) =>
       [...state.scenarios].sort(
@@ -40,10 +53,38 @@ export default createStore({
   mutations: {
     setGmUser(state, user) {
       state.gmUser = user;
+      if (!user) {
+        state.gmPlayerPreviewMode = false;
+        state.gmPreviewTeamId = null;
+      }
     },
-    setPlayerContext(state, teamId) {
-      state.userRole = teamId ? "player" : "gm";
-      state.playerTeamId = teamId || null;
+    setPlayerContext(state, payload) {
+      if (!payload) {
+        state.userRole = "gm";
+        state.playerTeamId = null;
+        state.playerCharacterId = null;
+        return;
+      }
+      if (typeof payload === "string") {
+        state.userRole = "player";
+        state.playerTeamId = payload;
+        return;
+      }
+      state.userRole = payload.teamId ? "player" : "gm";
+      state.playerTeamId = payload.teamId || null;
+      if (payload.characterId !== undefined) {
+        state.playerCharacterId = payload.characterId || null;
+      }
+    },
+    setGmPlayerPreview(state, enabled) {
+      state.gmPlayerPreviewMode = Boolean(enabled);
+      if (!enabled) state.gmPreviewTeamId = null;
+    },
+    setGmPreviewTeam(state, teamId) {
+      state.gmPreviewTeamId = teamId || null;
+    },
+    setUserRole(state, role) {
+      state.userRole = role === "gm" ? "gm" : "player";
     },
     setPlayerStageRecords(state, records) {
       state.playerStageRecords = records || [];

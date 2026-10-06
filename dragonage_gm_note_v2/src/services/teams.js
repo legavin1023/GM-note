@@ -56,7 +56,7 @@ export async function createTeam(campaignId, teamData) {
       name: teamData.name || "새 팀",
       description: teamData.description || "",
       region: teamData.region || "",
-      color: teamData.color || "#8b7aa8",
+      color: teamData.color || "#b42332",
       sort_order: teamData.sort_order || 0,
     })
     .select()
@@ -64,6 +64,18 @@ export async function createTeam(campaignId, teamData) {
 
   if (error) throw error;
   return { ...data, characters: [] };
+}
+
+/**
+ * Player-owned public team profile. Progress and GM-only fields are rejected
+ * by the RPC whitelist.
+ */
+export async function updatePlayerTeamProfile(updates) {
+  const { data, error } = await supabase.rpc("player_update_team_profile", {
+    p_updates: updates,
+  });
+  if (error) throw error;
+  return data;
 }
 
 /**
@@ -108,12 +120,44 @@ export async function deleteTeam(teamId) {
 export async function getProgressStages() {
   const { data, error } = await supabase
     .from("progress_stages")
-    .select("step_number, title, description")
+    .select("step_number, title, description, is_active")
     .order("step_number", { ascending: true });
 
   if (error) {
+    // Keep the tracker usable before the optional activation migration is run.
+    if (error.code === "42703" || error.code === "PGRST204") {
+      const { data: legacyData, error: legacyError } = await supabase
+        .from("progress_stages")
+        .select("step_number, title, description")
+        .order("step_number", { ascending: true });
+      if (legacyError) throw legacyError;
+      return (legacyData || []).map((stage) => ({
+        ...stage,
+        is_active: true,
+      }));
+    }
     console.error("[Supabase] PROGRESS_STAGES ERROR", error);
     throw error;
   }
   return data || [];
+}
+
+/** Toggle whether a progress stage appears in the player tracker. */
+export async function setProgressStageActive(stepNumber, isActive) {
+  const { data, error } = await supabase
+    .from("progress_stages")
+    .update({ is_active: Boolean(isActive) })
+    .eq("step_number", stepNumber)
+    .select("step_number, title, description, is_active")
+    .single();
+
+  if (error) {
+    if (error.code === "42703" || error.code === "PGRST204") {
+      throw new Error(
+        "비활성화 기능을 사용하려면 migration_progress_stage_activation.sql을 먼저 적용하세요."
+      );
+    }
+    throw error;
+  }
+  return data;
 }

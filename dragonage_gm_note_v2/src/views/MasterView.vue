@@ -33,7 +33,9 @@
         </div>
         <router-link to="/teams" class="text-button">팀 관리 →</router-link>
       </div>
-      <p v-if="progressError" class="empty-state">팀 진행 기록 조회 실패: {{ progressError }}</p>
+      <p v-if="progressError" class="empty-state">
+        팀 진행 기록 조회 실패: {{ progressError }}
+      </p>
       <div class="team-progress-grid">
         <router-link
           v-for="team in sortedTeams"
@@ -50,14 +52,21 @@
             <div class="master-team-progress__track">
               <div
                 class="master-team-progress__fill"
-                :style="{ width: teamProgress(team) + '%' }"
+                :style="{
+                  width: teamProgress(team) + '%',
+                  backgroundColor: team.color || 'var(--accent)',
+                }"
               ></div>
             </div>
             <span class="progress-pct">{{ teamProgress(team) }}%</span>
           </div>
           <div class="tpc-foot">
-            <span class="team-progress-stage-title">{{ teamProgressTitle(team) || '진행 시나리오 미정' }}</span>
-            <span class="muted">{{ teamProgressDescription(team) || '진행 설명 없음' }}</span>
+            <span class="team-progress-stage-title">{{
+              teamProgressTitle(team) || "진행 시나리오 미정"
+            }}</span>
+            <span class="muted">{{
+              teamProgressDescription(team) || "진행 설명 없음"
+            }}</span>
           </div>
         </router-link>
       </div>
@@ -83,8 +92,12 @@
       <div v-if="!trackerScenarios.length" class="empty-state">
         등록된 시나리오가 없습니다.
       </div>
-      <div v-else-if="loadingRecords" class="empty-state">팀별 선택 기록을 불러오는 중…</div>
-      <div v-else-if="recordsError || progressError" class="empty-state">서버 기록 조회에 실패했습니다: {{ recordsError || progressError }}</div>
+      <div v-else-if="loadingRecords" class="empty-state">
+        팀별 선택 기록을 불러오는 중…
+      </div>
+      <div v-else-if="recordsError || progressError" class="empty-state">
+        서버 기록 조회에 실패했습니다: {{ recordsError || progressError }}
+      </div>
       <div v-else class="decision-wrap">
         <div
           v-for="scenario in filteredScenarios"
@@ -107,7 +120,10 @@
                     :key="team.id"
                     class="team-col"
                   >
-                    <span class="team-dot-sm" :style="{ background: team.color }"></span>
+                    <span
+                      class="team-dot-sm"
+                      :style="{ background: team.color }"
+                    ></span>
                     {{ team.name }}
                   </th>
                 </tr>
@@ -132,14 +148,18 @@
                           : 'answer-badge--empty',
                       ]"
                     >
-                      {{ getAnswerCode(team, scenario, question) || '—' }}
+                      {{ getAnswerCode(team, scenario, question) || "—" }}
                     </span>
                   </td>
                 </tr>
                 <!-- 완료 행 -->
                 <tr class="complete-row">
                   <td class="q-col"><span class="q-code">완료</span></td>
-                  <td v-for="team in sortedTeams" :key="team.id" class="answer-cell">
+                  <td
+                    v-for="team in sortedTeams"
+                    :key="team.id"
+                    class="answer-cell"
+                  >
                     <span
                       :class="[
                         'badge',
@@ -148,7 +168,11 @@
                           : 'badge-muted',
                       ]"
                     >
-                      {{ isTeamScenarioComplete(team, scenario) ? '✓ 완료' : '진행 중' }}
+                      {{
+                        isTeamScenarioComplete(team, scenario)
+                          ? "✓ 완료"
+                          : "진행 중"
+                      }}
                     </span>
                   </td>
                 </tr>
@@ -178,11 +202,14 @@
                     <div
                       class="agg-bar-fill"
                       :style="{
-                        width: getChoicePercent(scenario, question, choice) + '%',
+                        width:
+                          getChoicePercent(scenario, question, choice) + '%',
                       }"
                     ></div>
                   </div>
-                  <span class="agg-count">{{ getChoiceCount(scenario, question, choice) }}팀</span>
+                  <span class="agg-count"
+                    >{{ getChoiceCount(scenario, question, choice) }}팀</span
+                  >
                 </div>
               </div>
             </div>
@@ -212,7 +239,9 @@
           </div>
           <span class="activity-time muted">{{ item.time }}</span>
         </div>
-        <div v-if="!recentActivity.length" class="empty-state">최근 활동이 없습니다.</div>
+        <div v-if="!recentActivity.length" class="empty-state">
+          최근 활동이 없습니다.
+        </div>
       </div>
     </section>
   </div>
@@ -254,15 +283,22 @@ export default {
         ...stage,
         id: String(stage.step_number),
         code: `S${String(stage.step_number).padStart(2, "0")}`,
-        questions: this.stageQuestions.filter((question) => question.step_number === stage.step_number),
+        questions: this.stageQuestions.filter(
+          (question) => question.step_number === stage.step_number
+        ),
       }));
     },
     filteredScenarios() {
       if (!this.filterScenario) return this.trackerScenarios;
-      return this.trackerScenarios.filter((s) => s.id === String(this.filterScenario));
+      return this.trackerScenarios.filter(
+        (s) => s.id === String(this.filterScenario)
+      );
     },
     totalCharacters() {
-      return this.teams.reduce((sum, t) => sum + (t.characters || []).length, 0);
+      return this.teams.reduce(
+        (sum, t) => sum + (t.characters || []).length,
+        0
+      );
     },
     overallProgress() {
       if (!this.teams.length) return 0;
@@ -279,7 +315,7 @@ export default {
           if (char.updated_at) {
             items.push({
               key: "char-" + char.id,
-              title: `캐릭터 "${char.character_name || '이름 없음'}" 수정`,
+              title: `캐릭터 "${char.character_name || "이름 없음"}" 수정`,
               sub: team.name,
               time: this.formatTime(char.updated_at),
               color: team.color,
@@ -295,10 +331,10 @@ export default {
             const scenario = this.scenarios.find((s) => s.id === scenarioId);
             items.push({
               key: "ts-" + record.id,
-              title: `${scenario?.code || ''} 시나리오 기록 업데이트`,
+              title: `${scenario?.code || ""} 시나리오 기록 업데이트`,
               sub: team?.name || "",
               time: this.formatTime(record.updated_at),
-              color: team?.color || "#8b7aa8",
+              color: team?.color || "#b42332",
               ts: new Date(record.updated_at).getTime(),
             });
           }
@@ -307,18 +343,39 @@ export default {
       return items.sort((a, b) => b.ts - a.ts).slice(0, 10);
     },
   },
-  async mounted() {
-    await this.loadAllRecords();
+  mounted() {
+    if (this.$store.getters.isPlayerPreview) {
+      this.$router.replace({ name: "home" });
+      return;
+    }
+    // Register every handler before subscribing. Use an instance-specific
+    // channel name so a route remount or dev hot reload cannot reuse a channel
+    // that has already entered the subscribed state.
     this.recordsChannel = this.$supabase
-      .channel("master-team-scenario-records")
-      .on("postgres_changes", { event: "*", schema: "public", table: "team_scenarios" }, this.loadAllRecords)
-      .on("postgres_changes", { event: "*", schema: "public", table: "team_scenario_answers" }, this.loadAllRecords)
-      .subscribe();
+      .channel(`master-team-scenario-records-${this._uid}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "team_scenarios" },
+        () => this.loadAllRecords()
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "team_scenario_answers" },
+        () => this.loadAllRecords()
+      );
+    this.recordsChannel.subscribe();
+    this.loadAllRecords();
   },
   beforeUnmount() {
-    if (this.recordsChannel) this.$supabase.removeChannel(this.recordsChannel);
+    if (this.recordsChannel) {
+      this.$supabase.removeChannel(this.recordsChannel);
+      this.recordsChannel = null;
+    }
   },
   watch: {
+    "$store.state.gmPlayerPreviewMode"(enabled) {
+      if (enabled) this.$router.replace({ name: "home" });
+    },
     scenarios() {
       this.loadAllRecords();
     },
@@ -336,24 +393,38 @@ export default {
       this.progressError = null;
       try {
         this.stageQuestions = await getProgressStageQuestions();
-        console.info("[Supabase] progress stage questions:", this.stageQuestions.length);
+        console.info(
+          "[Supabase] progress stage questions:",
+          this.stageQuestions.length
+        );
       } catch (error) {
         this.stageQuestions = [];
         this.progressError = error.message || String(error);
         console.error("[Supabase] PROGRESS STAGE QUESTIONS ERROR", error);
       }
       try {
-        const results = await Promise.all(this.scenarios.map((scenario) => getAllTeamScenariosForScenario(scenario.id)));
+        const results = await Promise.all(
+          this.scenarios.map((scenario) =>
+            getAllTeamScenariosForScenario(scenario.id)
+          )
+        );
         const records = {};
-        this.scenarios.forEach((scenario, index) => { records[scenario.id] = results[index]; });
+        this.scenarios.forEach((scenario, index) => {
+          records[scenario.id] = results[index];
+        });
         this.allTeamRecords = records;
       } catch (error) {
         this.allTeamRecords = {};
         this.recordsError = error.message || String(error);
       }
       try {
-        this.progressRecords = await getTeamProgressRecords(this.teams.map((team) => team.id));
-        console.info("[Supabase] team progress records:", this.progressRecords.length);
+        this.progressRecords = await getTeamProgressRecords(
+          this.teams.map((team) => team.id)
+        );
+        console.info(
+          "[Supabase] team progress records:",
+          this.progressRecords.length
+        );
       } catch (error) {
         this.progressRecords = [];
         this.progressError = error.message || String(error);
@@ -364,7 +435,10 @@ export default {
     teamProgress(team) {
       const total = this.progressStages.length || this.scenarios.length;
       if (!total) return 0;
-      return Math.min(Math.round((this.teamProgressStep(team) / total) * 100), 100);
+      return Math.min(
+        Math.round((this.teamProgressStep(team) / total) * 100),
+        100
+      );
     },
     teamProgressStep(team) {
       const step = Number(team.progress_step);
@@ -384,9 +458,13 @@ export default {
     },
     getTeamRecord(team, scenario) {
       if (scenario.step_number != null) {
-        return this.progressRecords.find((record) =>
-          record.team_id === team.id && record.step_number === scenario.step_number
-        ) || null;
+        return (
+          this.progressRecords.find(
+            (record) =>
+              record.team_id === team.id &&
+              record.step_number === scenario.step_number
+          ) || null
+        );
       }
       const records = this.allTeamRecords[scenario.id] || [];
       return records.find((r) => r.team_id === team.id) || null;
@@ -415,7 +493,9 @@ export default {
       return choice?.label || "미선택";
     },
     getChoiceCount(scenario, question, choice) {
-      const records = this.progressRecords.filter((record) => record.step_number === Number(scenario.id));
+      const records = this.progressRecords.filter(
+        (record) => record.step_number === Number(scenario.id)
+      );
       return records.filter((r) =>
         (r.team_scenario_answers || []).some(
           (a) => a.question_id === question.id && a.choice_id === choice.id
@@ -425,7 +505,9 @@ export default {
     getChoicePercent(scenario, question, choice) {
       const total = this.teams.length;
       if (!total) return 0;
-      return Math.round((this.getChoiceCount(scenario, question, choice) / total) * 100);
+      return Math.round(
+        (this.getChoiceCount(scenario, question, choice) / total) * 100
+      );
     },
     formatTime(isoStr) {
       if (!isoStr) return "";
@@ -443,7 +525,11 @@ export default {
 
 <style scoped>
 /* GM 메인 대시보드의 요약 카드와 진행 현황에 적용됩니다. */
-.master-view { display: flex; flex-direction: column; gap: 32px; }
+.master-view {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
 .metric-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -469,9 +555,16 @@ export default {
   margin-left: 4px;
   opacity: 0.6;
 }
-.metric-card .metric-note { font-size: 12px; color: var(--muted); }
-.accent-card { border-color: var(--accent); }
-.accent-card strong { color: var(--accent); }
+.metric-card .metric-note {
+  font-size: 12px;
+  color: var(--muted);
+}
+.accent-card {
+  border-color: var(--accent);
+}
+.accent-card strong {
+  color: var(--accent);
+}
 
 .section-block {
   background: var(--panel);
@@ -505,9 +598,22 @@ export default {
   gap: 8px;
   margin-bottom: 12px;
 }
-.tpc-head b { flex: 1; font-size: 14px; }
-.team-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-.tpc-progress { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.tpc-head b {
+  flex: 1;
+  font-size: 14px;
+}
+.team-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.tpc-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
 .master-team-progress__track {
   display: block;
   flex: 1 1 auto;
@@ -524,72 +630,195 @@ export default {
   border-radius: inherit;
   transition: width 0.3s ease;
 }
-.progress-pct { font-size: 13px; font-weight: 700; min-width: 36px; text-align: right; }
-.tpc-foot { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
-.team-progress-stage-title { color: var(--ink); font-weight: 600; }
+.progress-pct {
+  font-size: 13px;
+  font-weight: 700;
+  min-width: 36px;
+  text-align: right;
+}
+.tpc-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+.team-progress-stage-title {
+  color: var(--ink);
+  font-weight: 600;
+}
 
-.filter-row { display: flex; gap: 8px; }
-.filter-select { font-size: 13px; padding: 7px 12px; min-width: 200px; }
+.filter-row {
+  display: flex;
+  gap: 8px;
+}
+.filter-select {
+  font-size: 13px;
+  padding: 7px 12px;
+  min-width: 200px;
+}
 
-.decision-wrap { display: flex; flex-direction: column; gap: 32px; }
-.decision-block { }
-.decision-block-head { margin-bottom: 12px; }
-.decision-block-head h3 { font-size: 16px; font-weight: 700; margin: 4px 0 0; }
+.decision-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+.decision-block {
+}
+.decision-block-head {
+  margin-bottom: 12px;
+}
+.decision-block-head h3 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 4px 0 0;
+}
 
-.compare-table-wrap { overflow-x: auto; }
+.compare-table-wrap {
+  overflow-x: auto;
+}
 .compare-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
   min-width: 500px;
 }
-.compare-table th, .compare-table td {
+.compare-table th,
+.compare-table td {
   padding: 10px 12px;
   border-bottom: 1px solid var(--line);
   text-align: left;
   vertical-align: top;
 }
-.compare-table th { background: var(--paper); font-weight: 600; font-size: 12px; }
-.q-col { min-width: 200px; max-width: 280px; }
-.team-col { min-width: 90px; font-size: 12px; }
-.q-code { display: inline-block; font: 600 10px "DM Mono",monospace; background: var(--line); padding: 2px 6px; border-radius: 2px; margin-right: 6px; color: var(--muted); }
-.q-prompt { font-size: 13px; }
-.answer-cell { text-align: center; }
+.compare-table th {
+  background: var(--paper);
+  font-weight: 600;
+  font-size: 12px;
+}
+.q-col {
+  min-width: 200px;
+  max-width: 280px;
+}
+.team-col {
+  min-width: 90px;
+  font-size: 12px;
+}
+.q-code {
+  display: inline-block;
+  font: 600 10px "DM Mono", monospace;
+  background: var(--line);
+  padding: 2px 6px;
+  border-radius: 2px;
+  margin-right: 6px;
+  color: var(--muted);
+}
+.q-prompt {
+  font-size: 13px;
+}
+.answer-cell {
+  text-align: center;
+}
 .answer-badge {
   display: inline-block;
-  font: 700 11px "DM Mono",monospace;
+  font: 700 11px "DM Mono", monospace;
   padding: 3px 8px;
   border-radius: 2px;
   min-width: 28px;
   text-align: center;
 }
-.answer-badge--set { background: rgba(201,121,84,0.15); color: var(--accent); }
-.answer-badge--empty { background: var(--line); color: var(--muted); }
-.complete-row td { background: var(--paper); }
+.answer-badge--set {
+  background: rgba(201, 121, 84, 0.15);
+  color: var(--accent);
+}
+.answer-badge--empty {
+  background: var(--line);
+  color: var(--muted);
+}
+.complete-row td {
+  background: var(--paper);
+}
 .team-dot-sm {
   display: inline-block;
-  width: 7px; height: 7px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   margin-right: 4px;
   vertical-align: middle;
 }
 
-.aggregate-section { margin-top: 20px; }
-.agg-block { margin-top: 12px; }
-.agg-title { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
-.agg-bars { display: flex; flex-direction: column; gap: 6px; }
-.agg-row { display: flex; align-items: center; gap: 10px; }
-.agg-label { font-size: 13px; min-width: 120px; }
-.agg-bar-wrap { flex: 1; background: var(--line); height: 8px; border-radius: 4px; overflow: hidden; }
-.agg-bar-fill { height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.3s; }
-.agg-count { font-size: 12px; color: var(--muted); min-width: 32px; text-align: right; }
+.aggregate-section {
+  margin-top: 20px;
+}
+.agg-block {
+  margin-top: 12px;
+}
+.agg-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.agg-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.agg-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.agg-label {
+  font-size: 13px;
+  min-width: 120px;
+}
+.agg-bar-wrap {
+  flex: 1;
+  background: var(--line);
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.agg-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+.agg-count {
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 32px;
+  text-align: right;
+}
 
-.activity-list { display: flex; flex-direction: column; gap: 12px; }
-.activity-item { display: flex; align-items: flex-start; gap: 12px; }
-.activity-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 6px; }
-.activity-title { font-size: 14px; font-weight: 600; }
-.activity-sub { font-size: 12px; }
-.activity-time { margin-left: auto; font-size: 12px; flex-shrink: 0; }
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.activity-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+.activity-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+.activity-sub {
+  font-size: 12px;
+}
+.activity-time {
+  margin-left: auto;
+  font-size: 12px;
+  flex-shrink: 0;
+}
 
 .empty-state {
   padding: 24px;
@@ -597,13 +826,22 @@ export default {
   color: var(--muted);
   font-size: 14px;
 }
-.empty-state a { color: var(--accent); }
+.empty-state a {
+  color: var(--accent);
+}
 
 @media (max-width: 900px) {
-  .metric-row { grid-template-columns: repeat(2, 1fr); }
-  .compare-table th, .compare-table td { padding: 8px; }
+  .metric-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .compare-table th,
+  .compare-table td {
+    padding: 8px;
+  }
 }
 @media (max-width: 600px) {
-  .metric-row { grid-template-columns: 1fr 1fr; }
+  .metric-row {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 </style>

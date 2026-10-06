@@ -35,15 +35,20 @@ export async function getScenarios(campaignId) {
 
   return (data || []).map((s, scenarioIndex) => ({
     ...s,
-    code: s.code || `S${String(s.sort_order || scenarioIndex + 1).padStart(2, "0")}`,
+    code:
+      s.code ||
+      `S${String(s.sort_order || scenarioIndex + 1).padStart(2, "0")}`,
     questions: (s.scenario_questions || [])
       .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
       .map((q, questionIndex) => ({
         ...q,
         code: `Q${String(q.sort_order || questionIndex + 1).padStart(2, "0")}`,
-        choices: (q.question_choices || []).sort(
-          (a, b) => (a.sort_order || 0) - (b.sort_order || 0)
-        ).map((choice, index) => ({ ...choice, code: choice.code || String.fromCharCode(65 + index) })),
+        choices: (q.question_choices || [])
+          .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+          .map((choice, index) => ({
+            ...choice,
+            code: choice.code || String.fromCharCode(65 + index),
+          })),
       })),
   }));
 }
@@ -75,9 +80,12 @@ export async function getScenario(scenarioId) {
       .map((q, questionIndex) => ({
         ...q,
         code: `Q${String(q.sort_order || questionIndex + 1).padStart(2, "0")}`,
-        choices: (q.question_choices || []).sort(
-          (a, b) => (a.sort_order || 0) - (b.sort_order || 0)
-        ).map((choice, index) => ({ ...choice, code: choice.code || String.fromCharCode(65 + index) })),
+        choices: (q.question_choices || [])
+          .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+          .map((choice, index) => ({
+            ...choice,
+            code: choice.code || String.fromCharCode(65 + index),
+          })),
       })),
   };
 }
@@ -108,12 +116,21 @@ export async function getTeamScenarios(teamId) {
 
 async function attachGmNotes(records) {
   if (!records.length) return records;
-  const { data, error } = await supabase.from("team_scenario_gm_notes")
+  const { data, error } = await supabase
+    .from("team_scenario_gm_notes")
     .select("team_scenario_id, gm_note")
-    .in("team_scenario_id", records.map((record) => record.id));
+    .in(
+      "team_scenario_id",
+      records.map((record) => record.id)
+    );
   if (error) throw error;
-  const notes = new Map((data || []).map((note) => [note.team_scenario_id, note.gm_note]));
-  return records.map((record) => ({ ...record, gm_note: notes.get(record.id) || "" }));
+  const notes = new Map(
+    (data || []).map((note) => [note.team_scenario_id, note.gm_note])
+  );
+  return records.map((record) => ({
+    ...record,
+    gm_note: notes.get(record.id) || "",
+  }));
 }
 
 /**
@@ -143,7 +160,9 @@ export async function getOrCreateTeamScenario(teamId, scenarioId) {
   // 먼저 조회
   const { data: existing, error: lookupError } = await supabase
     .from("team_scenarios")
-    .select("id, team_id, scenario_id, completed, step_number, created_at, updated_at")
+    .select(
+      "id, team_id, scenario_id, completed, step_number, created_at, updated_at"
+    )
     .eq("team_id", teamId)
     .eq("scenario_id", scenarioId)
     .maybeSingle();
@@ -174,7 +193,9 @@ export async function getOrCreateTeamScenario(teamId, scenarioId) {
 export async function getOrCreateTeamProgressStage(teamId, stepNumber) {
   const { data: existing, error: lookupError } = await supabase
     .from("team_scenarios")
-    .select("id, team_id, scenario_id, completed, step_number, created_at, updated_at")
+    .select(
+      "id, team_id, scenario_id, completed, step_number, created_at, updated_at"
+    )
     .eq("team_id", teamId)
     .eq("step_number", stepNumber)
     .order("created_at", { ascending: true })
@@ -205,21 +226,87 @@ export async function getTeamProgressRecords(teamIds) {
   if (!teamIds.length) return [];
   const { data, error } = await supabase
     .from("team_scenarios")
-    .select(`
+    .select(
+      `
       id, team_id, scenario_id, step_number, completed, updated_at,
       team_scenario_answers(id, team_scenario_id, question_id, choice_id)
-    `)
+    `
+    )
     .in("team_id", teamIds)
     .not("step_number", "is", null);
   if (error) throw error;
   return data || [];
 }
 
+/** Load completed campaign scenario records visible under player tracker RLS. */
+export async function getCompletedScenarioRecords(scenarioIds) {
+  if (!scenarioIds?.length) return [];
+  const { data, error } = await supabase
+    .from("team_scenarios")
+    .select(
+      `
+      id, team_id, scenario_id, completed, updated_at,
+      team_scenario_answers(id, team_scenario_id, question_id, choice_id)
+    `
+    )
+    .in("scenario_id", scenarioIds)
+    .eq("completed", true);
+  if (error) throw error;
+  return data || [];
+}
+
+/** Load one already completed scenario record for a player without creating it. */
+export async function getPlayerScenarioRecord(teamId, scenarioId) {
+  const { data, error } = await supabase
+    .from("team_scenarios")
+    .select(
+      `
+      id, team_id, scenario_id, completed, updated_at,
+      team_scenario_answers(id, team_scenario_id, question_id, choice_id)
+    `
+    )
+    .eq("team_id", teamId)
+    .eq("scenario_id", scenarioId)
+    .eq("completed", true)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export function uniqueProgressStages(stages) {
+  const seen = new Set();
+  const unique = [];
+  for (const stage of stages || []) {
+    const step = Number(stage.step_number);
+    if (!Number.isInteger(step) || step < 1 || seen.has(step)) continue;
+    seen.add(step);
+    unique.push({ ...stage, step_number: step });
+  }
+  unique.sort((a, b) => a.step_number - b.step_number);
+  return unique;
+}
+
+export function playerVisibleTrackerStages(
+  stages,
+  currentProgressStep,
+  completedSteps = []
+) {
+  const limit = Math.max((Number(currentProgressStep) || 1) - 1, 0);
+  const completed = new Set((completedSteps || []).map(Number));
+  return uniqueProgressStages(stages).filter(
+    (stage) => stage.step_number <= limit && completed.has(stage.step_number)
+  );
+}
+
 /** Load questions and choices attached to progress_stages.step_number. */
 export async function getProgressStageQuestions() {
   const { data, error } = await supabase
     .from("scenario_questions")
-    .select("id, scenario_id, step_number, prompt, sort_order, question_choices(id, question_id, label, sort_order)")
+    .select(
+      "id, scenario_id, step_number, prompt, sort_order, question_choices(id, question_id, label, sort_order)"
+    )
     .not("step_number", "is", null)
     .order("sort_order", { ascending: true });
   if (error) {
@@ -231,7 +318,10 @@ export async function getProgressStageQuestions() {
     code: `Q${String(question.sort_order || index + 1).padStart(2, "0")}`,
     choices: (question.question_choices || [])
       .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
-      .map((choice, choiceIndex) => ({ ...choice, code: String.fromCharCode(65 + choiceIndex) })),
+      .map((choice, choiceIndex) => ({
+        ...choice,
+        code: String.fromCharCode(65 + choiceIndex),
+      })),
   }));
 }
 
@@ -249,18 +339,29 @@ export async function getProgressStageWithQuestions(stepNumber) {
     code: `S${String(stage.step_number).padStart(2, "0")}`,
     title: stage.title,
     description: stage.description,
-    questions: questions.filter((question) => question.step_number === stage.step_number),
+    questions: questions.filter(
+      (question) => question.step_number === stage.step_number
+    ),
   };
 }
 
 /** Add a question and its answer choices to one progress stage. */
-export async function addProgressStageQuestion(stepNumber, prompt, choiceLabels) {
+export async function addProgressStageQuestion(
+  stepNumber,
+  prompt,
+  choiceLabels
+) {
   const cleanPrompt = String(prompt || "").trim();
-  const labels = (choiceLabels || []).map((label) => String(label || "").trim()).filter(Boolean);
+  const labels = (choiceLabels || [])
+    .map((label) => String(label || "").trim())
+    .filter(Boolean);
   if (!cleanPrompt) throw new Error("질문 내용을 입력하세요.");
   if (labels.length < 2) throw new Error("선택지를 두 개 이상 입력하세요.");
 
-  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
   if (userError) throw userError;
   if (!user) throw new Error("로그인 정보가 없어 질문을 저장할 수 없습니다.");
 
@@ -284,13 +385,15 @@ export async function addProgressStageQuestion(stepNumber, prompt, choiceLabels)
     .single();
   if (questionError) throw questionError;
 
-  const { error: choicesError } = await supabase.from("question_choices").insert(
-    labels.map((label, index) => ({
-      question_id: question.id,
-      label,
-      sort_order: index + 1,
-    }))
-  );
+  const { error: choicesError } = await supabase
+    .from("question_choices")
+    .insert(
+      labels.map((label, index) => ({
+        question_id: question.id,
+        label,
+        sort_order: index + 1,
+      }))
+    );
   if (choicesError) {
     await supabase.from("scenario_questions").delete().eq("id", question.id);
     throw choicesError;
@@ -305,10 +408,7 @@ export async function addProgressStageQuestion(stepNumber, prompt, choiceLabels)
 /**
  * 완료 여부 + GM 메모 저장
  */
-export async function saveTeamScenarioStatus(
-  teamScenarioId,
-  { completed }
-) {
+export async function saveTeamScenarioStatus(teamScenarioId, { completed }) {
   const { data, error } = await supabase
     .from("team_scenarios")
     .update({
@@ -324,9 +424,18 @@ export async function saveTeamScenarioStatus(
 }
 
 export async function saveTeamScenarioNote(teamScenarioId, gmNote) {
-  const { data, error } = await supabase.from("team_scenario_gm_notes")
-    .upsert({ team_scenario_id: teamScenarioId, gm_note: gmNote || "", updated_at: new Date().toISOString() }, { onConflict: "team_scenario_id" })
-    .select().single();
+  const { data, error } = await supabase
+    .from("team_scenario_gm_notes")
+    .upsert(
+      {
+        team_scenario_id: teamScenarioId,
+        gm_note: gmNote || "",
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "team_scenario_id" }
+    )
+    .select()
+    .single();
   if (error) throw error;
   return data;
 }
@@ -374,7 +483,11 @@ export async function saveTeamScenarioAnswer(
   const { data, error } = await supabase
     .from("team_scenario_answers")
     .upsert(
-      { team_scenario_id: teamScenarioId, question_id: questionId, choice_id: choiceId },
+      {
+        team_scenario_id: teamScenarioId,
+        question_id: questionId,
+        choice_id: choiceId,
+      },
       { onConflict: "team_scenario_id,question_id" }
     )
     .select()
@@ -393,10 +506,13 @@ export async function saveScenarioDefinition(scenario) {
     description: scenario.description || "",
     sort_order: Number(scenario.sort_order) || 0,
   };
-  const scenarioQuery = scenario.id && !String(scenario.id).startsWith("local_")
-    ? supabase.from("scenarios").update(scenarioPayload).eq("id", scenario.id)
-    : supabase.from("scenarios").insert(scenarioPayload);
-  const { data: savedScenario, error: scenarioError } = await scenarioQuery.select().single();
+  const scenarioQuery =
+    scenario.id && !String(scenario.id).startsWith("local_")
+      ? supabase.from("scenarios").update(scenarioPayload).eq("id", scenario.id)
+      : supabase.from("scenarios").insert(scenarioPayload);
+  const { data: savedScenario, error: scenarioError } = await scenarioQuery
+    .select()
+    .single();
   if (scenarioError) throw scenarioError;
 
   for (const [qi, question] of (scenario.questions || []).entries()) {
@@ -406,10 +522,16 @@ export async function saveScenarioDefinition(scenario) {
       sort_order: Number(question.sort_order) || qi + 1,
       step_number: question.step_number || null,
     };
-    const qQuery = question.id && !String(question.id).startsWith("local_")
-      ? supabase.from("scenario_questions").update(qPayload).eq("id", question.id)
-      : supabase.from("scenario_questions").insert(qPayload);
-    const { data: savedQuestion, error: qError } = await qQuery.select().single();
+    const qQuery =
+      question.id && !String(question.id).startsWith("local_")
+        ? supabase
+            .from("scenario_questions")
+            .update(qPayload)
+            .eq("id", question.id)
+        : supabase.from("scenario_questions").insert(qPayload);
+    const { data: savedQuestion, error: qError } = await qQuery
+      .select()
+      .single();
     if (qError) throw qError;
 
     for (const [ci, choice] of (question.choices || []).entries()) {
@@ -418,10 +540,16 @@ export async function saveScenarioDefinition(scenario) {
         label: choice.label || "",
         sort_order: Number(choice.sort_order) || ci + 1,
       };
-      const cQuery = choice.id && !String(choice.id).startsWith("local_")
-        ? supabase.from("question_choices").update(cPayload).eq("id", choice.id)
-        : supabase.from("question_choices").insert(cPayload);
-      const { data: savedChoice, error: cError } = await cQuery.select().single();
+      const cQuery =
+        choice.id && !String(choice.id).startsWith("local_")
+          ? supabase
+              .from("question_choices")
+              .update(cPayload)
+              .eq("id", choice.id)
+          : supabase.from("question_choices").insert(cPayload);
+      const { data: savedChoice, error: cError } = await cQuery
+        .select()
+        .single();
       if (cError) throw cError;
       choice.id = savedChoice.id;
     }
@@ -433,12 +561,18 @@ export async function saveScenarioDefinition(scenario) {
 }
 
 export async function deleteScenarioQuestion(questionId) {
-  const { error } = await supabase.from("scenario_questions").delete().eq("id", questionId);
+  const { error } = await supabase
+    .from("scenario_questions")
+    .delete()
+    .eq("id", questionId);
   if (error) throw error;
 }
 
 export async function deleteQuestionChoice(choiceId) {
-  const { error } = await supabase.from("question_choices").delete().eq("id", choiceId);
+  const { error } = await supabase
+    .from("question_choices")
+    .delete()
+    .eq("id", choiceId);
   if (error) throw error;
 }
 
@@ -457,20 +591,29 @@ export async function importScenariosFromJson(campaignId, jsonData) {
   for (const scenarioJson of jsonData.scenarios) {
     // 시나리오 UPSERT
     const scenarioPayload = {
-          campaign_id: campaignId,
-          code: scenarioJson.code,
-          title: scenarioJson.title,
-          description: scenarioJson.description || "",
-          sort_order: scenarioJson.sort_order || 0,
+      campaign_id: campaignId,
+      code: scenarioJson.code,
+      title: scenarioJson.title,
+      description: scenarioJson.description || "",
+      sort_order: scenarioJson.sort_order || 0,
     };
-    const { data: existingScenario, error: lookupScenarioError } = await supabase
-      .from("scenarios").select("id").eq("campaign_id", campaignId)
-      .eq("code", scenarioJson.code).maybeSingle();
+    const { data: existingScenario, error: lookupScenarioError } =
+      await supabase
+        .from("scenarios")
+        .select("id")
+        .eq("campaign_id", campaignId)
+        .eq("code", scenarioJson.code)
+        .maybeSingle();
     if (lookupScenarioError) throw lookupScenarioError;
     const scenarioQuery = existingScenario
-      ? supabase.from("scenarios").update(scenarioPayload).eq("id", existingScenario.id)
+      ? supabase
+          .from("scenarios")
+          .update(scenarioPayload)
+          .eq("id", existingScenario.id)
       : supabase.from("scenarios").insert(scenarioPayload);
-    const { data: scenarioRow, error: sError } = await scenarioQuery.select().single();
+    const { data: scenarioRow, error: sError } = await scenarioQuery
+      .select()
+      .single();
 
     if (sError) throw sError;
     results.push({ scenario: scenarioRow, questions: [] });
@@ -478,19 +621,28 @@ export async function importScenariosFromJson(campaignId, jsonData) {
     // 질문 UPSERT
     for (const questionJson of scenarioJson.questions || []) {
       const questionPayload = {
-            scenario_id: scenarioRow.id,
-            prompt: questionJson.prompt,
-            sort_order: questionJson.sort_order || 0,
-            step_number: questionJson.step_number || null,
+        scenario_id: scenarioRow.id,
+        prompt: questionJson.prompt,
+        sort_order: questionJson.sort_order || 0,
+        step_number: questionJson.step_number || null,
       };
-      const { data: existingQuestion, error: lookupQuestionError } = await supabase
-        .from("scenario_questions").select("id").eq("scenario_id", scenarioRow.id)
-        .eq("sort_order", questionPayload.sort_order).maybeSingle();
+      const { data: existingQuestion, error: lookupQuestionError } =
+        await supabase
+          .from("scenario_questions")
+          .select("id")
+          .eq("scenario_id", scenarioRow.id)
+          .eq("sort_order", questionPayload.sort_order)
+          .maybeSingle();
       if (lookupQuestionError) throw lookupQuestionError;
       const questionQuery = existingQuestion
-        ? supabase.from("scenario_questions").update(questionPayload).eq("id", existingQuestion.id)
+        ? supabase
+            .from("scenario_questions")
+            .update(questionPayload)
+            .eq("id", existingQuestion.id)
         : supabase.from("scenario_questions").insert(questionPayload);
-      const { data: questionRow, error: qError } = await questionQuery.select().single();
+      const { data: questionRow, error: qError } = await questionQuery
+        .select()
+        .single();
 
       if (qError) throw qError;
 
@@ -501,12 +653,19 @@ export async function importScenariosFromJson(campaignId, jsonData) {
           label: choiceJson.label,
           sort_order: choiceJson.sort_order || 0,
         };
-        const { data: existingChoice, error: lookupChoiceError } = await supabase
-          .from("question_choices").select("id").eq("question_id", questionRow.id)
-          .eq("sort_order", choicePayload.sort_order).maybeSingle();
+        const { data: existingChoice, error: lookupChoiceError } =
+          await supabase
+            .from("question_choices")
+            .select("id")
+            .eq("question_id", questionRow.id)
+            .eq("sort_order", choicePayload.sort_order)
+            .maybeSingle();
         if (lookupChoiceError) throw lookupChoiceError;
         const choiceQuery = existingChoice
-          ? supabase.from("question_choices").update(choicePayload).eq("id", existingChoice.id)
+          ? supabase
+              .from("question_choices")
+              .update(choicePayload)
+              .eq("id", existingChoice.id)
           : supabase.from("question_choices").insert(choicePayload);
         const { error: cError } = await choiceQuery;
 

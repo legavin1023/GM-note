@@ -1,16 +1,15 @@
 /**
- * campaigns.js — 캠페인 관련 Supabase 함수
+ * campaigns.js — Campaign Supabase functions
  */
 import { supabase } from "@/supabase";
 
 /**
- * 로그인한 GM의 캠페인 목록 조회
+ * List campaigns visible to the authenticated user. Database RLS applies access.
  */
-export async function getCampaigns(ownerId) {
+export async function getCampaigns() {
   const { data, error } = await supabase
     .from("campaigns")
     .select("id, owner_id, title, version, created_at, updated_at")
-    .eq("owner_id", ownerId)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -21,9 +20,9 @@ export async function getCampaigns(ownerId) {
 }
 
 /**
- * 캠페인 하나 생성 (처음 사용 시)
+ * Create a campaign for the authenticated GM.
  */
-export async function createCampaign(ownerId, title = "드래곤 에이지") {
+export async function createCampaign(ownerId, title = "Dragon Age") {
   const { data, error } = await supabase
     .from("campaigns")
     .insert({ owner_id: ownerId, title })

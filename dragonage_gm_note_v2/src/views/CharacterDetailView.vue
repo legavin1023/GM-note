@@ -3,9 +3,17 @@
     <div class="section-heading">
       <div>
         <span class="eyebrow">CHARACTER PROFILE</span>
-        <h2 class="section-title">{{ character.character_name || "이름 없음" }}</h2>
+        <h2 class="section-title">
+          {{ character.character_name || "이름 없음" }}
+        </h2>
       </div>
       <div class="header-actions">
+        <router-link
+          class="outline-button"
+          :to="{ name: 'free-board', query: { characterId: characterId } }"
+        >
+          언급된 작품 글
+        </router-link>
         <button class="primary-button" :disabled="saving" @click="handleSave">
           {{ saving ? "저장 중..." : "저장" }}
         </button>
@@ -13,7 +21,34 @@
       </div>
     </div>
 
-    <div class="sheet-layout">
+    <nav class="memory-tabs" aria-label="캐릭터 정보 메뉴">
+      <button
+        class="memory-tab"
+        :class="{ active: activeDetailTab === 'profile' }"
+        type="button"
+        @click="activeDetailTab = 'profile'"
+      >
+        프로필
+      </button>
+      <button
+        class="memory-tab"
+        :class="{ active: activeDetailTab === 'notes' }"
+        type="button"
+        @click="activeDetailTab = 'notes'"
+      >
+        파티원 메모
+      </button>
+      <button
+        class="memory-tab"
+        :class="{ active: activeDetailTab === 'mentioned-posts' }"
+        type="button"
+        @click="activeDetailTab = 'mentioned-posts'"
+      >
+        이 캐릭터 언급 글
+      </button>
+    </nav>
+
+    <div v-if="activeDetailTab === 'profile'" class="sheet-layout">
       <!-- 좌측 프로필 카드 & 토큰 업로드 -->
       <div class="profile-sidebar card">
         <div class="avatar-wrapper">
@@ -90,7 +125,11 @@
           </label>
           <label class="form-label">
             캐릭터 이름
-            <input v-model="character.character_name" class="form-input" required />
+            <input
+              v-model="character.character_name"
+              class="form-input"
+              required
+            />
           </label>
           <label class="form-label">
             PL (플레이어 이름)
@@ -231,39 +270,83 @@
           </label>
           <label class="form-label">
             캐릭터를 관통하는 키워드와 신념
-            <textarea v-model="character.gm_core_belief" class="form-textarea" placeholder="캐릭터를 움직이는 핵심 키워드와 신념"></textarea>
+            <textarea
+              v-model="character.gm_core_belief"
+              class="form-textarea"
+              placeholder="캐릭터를 움직이는 핵심 키워드와 신념"
+            ></textarea>
           </label>
           <label class="form-label">
             가장 후회하는 일
-            <textarea v-model="character.gm_regret" class="form-textarea" placeholder="캐릭터가 가장 후회하는 일"></textarea>
+            <textarea
+              v-model="character.gm_regret"
+              class="form-textarea"
+              placeholder="캐릭터가 가장 후회하는 일"
+            ></textarea>
           </label>
           <label class="form-label">
             가장 소중한 사람
-            <textarea v-model="character.gm_cherished_person" class="form-textarea" placeholder="가장 소중한 사람과 그 이유"></textarea>
+            <textarea
+              v-model="character.gm_cherished_person"
+              class="form-textarea"
+              placeholder="가장 소중한 사람과 그 이유"
+            ></textarea>
           </label>
           <label class="form-label">
             가장 원하는 것
-            <textarea v-model="character.gm_desire" class="form-textarea" placeholder="캐릭터가 가장 원하는 것"></textarea>
+            <textarea
+              v-model="character.gm_desire"
+              class="form-textarea"
+              placeholder="캐릭터가 가장 원하는 것"
+            ></textarea>
           </label>
           <label class="form-label">
             가장 두려운 것
-            <textarea v-model="character.gm_fear" class="form-textarea" placeholder="캐릭터가 가장 두려워하는 것"></textarea>
+            <textarea
+              v-model="character.gm_fear"
+              class="form-textarea"
+              placeholder="캐릭터가 가장 두려워하는 것"
+            ></textarea>
           </label>
           <label class="form-label">
             아무도 모르는 비밀
-            <textarea v-model="character.gm_unknown_secret" class="form-textarea" placeholder="아직 누구에게도 밝히지 않은 비밀"></textarea>
+            <textarea
+              v-model="character.gm_unknown_secret"
+              class="form-textarea"
+              placeholder="아직 누구에게도 밝히지 않은 비밀"
+            ></textarea>
           </label>
           <label class="form-label">
             등장하거나 언급되길 바라는 과거사
-            <textarea v-model="character.gm_backstory_hooks" class="form-textarea" placeholder="등장하면 좋거나 언급되길 바라는 인물, 사건, 장소 등"></textarea>
+            <textarea
+              v-model="character.gm_backstory_hooks"
+              class="form-textarea"
+              placeholder="등장하면 좋거나 언급되길 바라는 인물, 사건, 장소 등"
+            ></textarea>
           </label>
         </div>
       </div>
     </div>
+    <CharacterNotesPanel
+      v-if="activeDetailTab === 'notes' && character.team_id"
+      mode="party"
+      :team-id="character.team_id"
+      :target-character-id="character.id"
+      :team-characters="
+        teams.find((team) => team.id === character.team_id)?.characters || []
+      "
+    />
+    <CharacterTaggedPostsPanel
+      v-if="activeDetailTab === 'mentioned-posts'"
+      :character-id="character.id"
+      :character-name="character.character_name"
+    />
   </div>
 </template>
 
 <script>
+import CharacterNotesPanel from "@/components/CharacterNotesPanel.vue";
+import CharacterTaggedPostsPanel from "@/components/CharacterTaggedPostsPanel.vue";
 import {
   getCharacter,
   saveCharacter,
@@ -274,6 +357,7 @@ import {
 
 export default {
   name: "CharacterDetailView",
+  components: { CharacterNotesPanel, CharacterTaggedPostsPanel },
   props: {
     characterId: { type: String, required: true },
   },
@@ -284,6 +368,7 @@ export default {
       tokenHistory: [],
       tokenCursor: 0,
       tokenImageFailed: false,
+      activeDetailTab: "profile",
     };
   },
   computed: {
@@ -292,7 +377,7 @@ export default {
     },
     teamColor() {
       const t = this.teams.find((item) => item.id === this.character?.team_id);
-      return t ? t.color : "#8b7aa8";
+      return t ? t.color : "#b42332";
     },
   },
   async mounted() {
@@ -347,7 +432,9 @@ export default {
     },
     async handleDelete() {
       if (
-        !confirm(`'${this.character.character_name}' 캐릭터를 정말 삭제하시겠습니까?`)
+        !confirm(
+          `'${this.character.character_name}' 캐릭터를 정말 삭제하시겠습니까?`
+        )
       )
         return;
       try {

@@ -5,7 +5,7 @@
         <span class="eyebrow">ASSET LIBRARY</span>
         <h2 class="section-title">토큰 갤러리</h2>
       </div>
-      <div class="actions">
+      <div v-if="isGM" class="actions">
         <button class="primary-button" @click="showUrlModal = true">
           ＋ URL로 추가
         </button>
@@ -30,6 +30,15 @@
         전체 보기 ({{ images.length }})
       </button>
       <button
+        :class="[
+          'filter-tab',
+          { active: selectedTeamFilter === '__master_npcs__' },
+        ]"
+        @click="selectedTeamFilter = '__master_npcs__'"
+      >
+        마스터 NPC ({{ visibleScenarioNpcs.length }})
+      </button>
+      <button
         v-for="t in teams"
         :key="t.id"
         :class="['filter-tab', { active: selectedTeamFilter === t.id }]"
@@ -42,11 +51,12 @@
 
     <!-- 드래그 앤 드롭 영역 -->
     <div
+      v-if="isGM"
       class="drop-zone"
       :class="{ dragging: isDragging }"
       @dragover.prevent="isDragging = true"
       @dragleave.prevent="isDragging = false"
-      @drop.prevent="handleDrop"
+      @drop.prevent="handleDrop($event)"
     >
       <p class="muted">
         이미지 파일을 이곳으로 드래그 앤 드롭하여 업로드하세요
@@ -54,7 +64,44 @@
     </div>
 
     <!-- 이미지 그리드 -->
-    <p v-if="imagesLoading" class="muted">이미지를 불러오는 중…</p>
+    <p v-if="imagesLoading || (isMasterNpcTab && npcsLoading)" class="muted">
+      이미지를 불러오는 중…
+    </p>
+    <div v-else-if="isMasterNpcTab && npcsError" class="empty-state">
+      NPC 목록을 불러오지 못했습니다: {{ npcsError }}
+    </div>
+    <div v-else-if="isMasterNpcTab" class="gallery-grid npc-gallery-grid">
+      <article
+        v-for="npc in visibleScenarioNpcs"
+        :key="npc.id"
+        class="gallery-item card npc-gallery-card"
+      >
+        <router-link
+          :to="{ name: 'npc-feedback', params: { npcId: npc.id } }"
+          class="npc-gallery-link"
+        >
+          <img
+            v-if="npc.token_url"
+            :src="npc.token_url"
+            :alt="`${npc.name} 토큰`"
+          />
+          <div v-else class="npc-token-placeholder">NPC</div>
+          <div class="img-meta">
+            <strong class="img-caption">{{ npc.name }}</strong>
+            <span class="img-owner muted">{{
+              [npc.age, npc.gender].filter(Boolean).join(" · ") || "정보 없음"
+            }}</span>
+            <span class="img-date muted">{{
+              scenarioTitle(npc.scenario_step)
+            }}</span>
+            <span class="npc-rate-link">평점과 댓글 보기 →</span>
+          </div>
+        </router-link>
+      </article>
+      <p v-if="!visibleScenarioNpcs.length" class="empty-state">
+        등록된 주요 NPC가 없습니다.
+      </p>
+    </div>
     <div v-else-if="imagesError" class="empty-state">
       이미지를 불러오지 못했습니다: {{ imagesError }}
     </div>
@@ -74,6 +121,7 @@
               img.caption || "캡션 없음"
             }}</strong>
             <button
+              v-if="isGM"
               class="delete-button"
               title="삭제"
               @click="handleDeleteImage(img.id)"
@@ -90,7 +138,12 @@
     </div>
 
     <div
-      v-if="!imagesLoading && !imagesError && !filteredImages.length"
+      v-if="
+        !isMasterNpcTab &&
+        !imagesLoading &&
+        !imagesError &&
+        !filteredImages.length
+      "
       class="empty-state"
     >
       등록된 이미지가 없습니다.
@@ -182,16 +235,22 @@
 <script>
 import {
   getCampaignImages,
+  getPlayerTeamGalleryImages,
+  includeCurrentCharacterTokens,
   saveImage,
   deleteImage,
   uploadGalleryImage,
 } from "@/services/images";
+import { supabase } from "@/supabase";
 
 export default {
   name: "GalleryView",
   data() {
     return {
       images: [],
+      scenarioNpcs: [],
+      npcsLoading: false,
+      npcsError: null,
       imagesLoading: false,
       imagesError: null,
       selectedTeamFilter: "",
@@ -203,11 +262,26 @@ export default {
     };
   },
   computed: {
+    isGM() {
+      return this.$store.getters.isGM;
+    },
+    isMaster() {
+      return this.$store.getters.isMaster;
+    },
+    isPlayerPreview() {
+      return this.$store.getters.isPlayerPreview;
+    },
+    playerTeamId() {
+      return this.$store.getters.activePlayerTeamId;
+    },
     teams() {
       return this.$store.getters.sortedTeams;
     },
     campaignId() {
       return this.$store.getters.campaignId;
+    },
+    isMasterNpcTab() {
+      return this.selectedTeamFilter === "__master_npcs__";
     },
     filteredImages() {
       if (!this.selectedTeamFilter) return this.images;
@@ -215,20 +289,92 @@ export default {
         (img) => img.team_id === this.selectedTeamFilter
       );
     },
+    visibleScenarioNpcs() {
+      if (!this.isPlayerPreview) return this.scenarioNpcs;
+      const team = this.teams.find((item) => item.id === this.playerTeamId);
+      const visibleStep = Math.max((Number(team?.progress_step) || 1) - 1, 0);
+      return this.scenarioNpcs.filter(
+        (npc) => Number(npc.scenario_step) <= visibleStep
+      );
+    },
   },
   async mounted() {
-    if (this.$route.query.teamId) {
-      this.selectedTeamFilter = this.$route.query.teamId;
-    }
-    await this.loadImages();
+    const requestedTeam = String(this.$route.query.teamId || "");
+    this.selectedTeamFilter = this.teams.some(
+      (team) => team.id === requestedTeam
+    )
+      ? requestedTeam
+      : "";
+    await Promise.all([this.loadImages(), this.loadScenarioNpcs()]);
+  },
+  watch: {
+    isPlayerPreview(enabled) {
+      if (enabled) this.showUrlModal = false;
+    },
+    "$store.state.teams": {
+      deep: true,
+      handler() {
+        if (this.campaignId && (this.isGM || this.playerTeamId)) {
+          this.loadImages();
+          this.loadScenarioNpcs();
+        }
+      },
+    },
+    playerTeamId(teamId) {
+      if ((!this.isGM || this.isPlayerPreview) && teamId) {
+        this.loadImages();
+        this.loadScenarioNpcs();
+      }
+    },
+    campaignId(campaignId) {
+      if (campaignId && (this.isGM || this.playerTeamId)) {
+        this.loadImages();
+        this.loadScenarioNpcs();
+      }
+    },
   },
   methods: {
-    async loadImages() {
+    async loadScenarioNpcs() {
       if (!this.campaignId) return;
+      this.npcsLoading = true;
+      this.npcsError = null;
+      const { data, error } = await supabase
+        .from("scenario_npcs")
+        .select("id, scenario_step, name, age, gender, token_url")
+        .eq("campaign_id", this.campaignId)
+        .order("scenario_step", { ascending: true })
+        .order("name", { ascending: true });
+      if (error) {
+        this.scenarioNpcs = [];
+        this.npcsError = error.message;
+      } else this.scenarioNpcs = data || [];
+      this.npcsLoading = false;
+    },
+    scenarioTitle(stepNumber) {
+      const stage = (this.$store.state.progressStages || []).find(
+        (item) => Number(item.step_number) === Number(stepNumber)
+      );
+      return stage?.title || stage?.name || `시나리오 ${stepNumber}`;
+    },
+    async loadImages() {
+      if (this.isGM && !this.campaignId) return;
+      if (!this.isGM && !this.playerTeamId) return;
       this.imagesLoading = true;
       this.imagesError = null;
       try {
-        this.images = await getCampaignImages(this.campaignId);
+        if (this.isMaster) {
+          const campaignImages = await getCampaignImages(this.campaignId);
+          this.images = includeCurrentCharacterTokens(
+            campaignImages,
+            this.teams
+          );
+        } else {
+          this.images = await getPlayerTeamGalleryImages(
+            this.playerTeamId,
+            this.campaignId,
+            this.teams
+          );
+        }
       } catch (error) {
         this.images = [];
         this.imagesError = error.message || String(error);
@@ -246,6 +392,7 @@ export default {
       return new Date(isoStr).toLocaleDateString("ko-KR");
     },
     async handleAddUrlImage() {
+      if (!this.isGM) return;
       if (!this.newImage.url.trim()) return;
       this.saving = true;
       try {
@@ -273,10 +420,12 @@ export default {
       }
     },
     async handleFileUpload(e) {
+      if (!this.isGM) return;
       const file = e.target.files[0];
       if (file) await this.uploadFile(file);
     },
     async handleDrop(e) {
+      if (!this.isGM) return;
       this.isDragging = false;
       const file = e.dataTransfer.files[0];
       if (file && file.type.startsWith("image/")) {
@@ -312,6 +461,7 @@ export default {
       }
     },
     async handleDeleteImage(id) {
+      if (!this.isGM) return;
       if (!confirm("이미지를 삭제하시겠습니까?")) return;
       try {
         await deleteImage(id);
@@ -401,6 +551,34 @@ export default {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+.npc-gallery-card {
+  height: 100%;
+}
+.npc-gallery-link {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  color: inherit;
+  text-decoration: none;
+}
+.npc-gallery-link > img,
+.npc-token-placeholder {
+  width: 100%;
+  height: 180px;
+  object-fit: contain;
+  background: var(--paper);
+}
+.npc-token-placeholder {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font: 700 18px "DM Mono", monospace;
+}
+.npc-rate-link {
+  margin-top: 8px;
+  color: var(--accent);
+  font-size: 12px;
 }
 .img-wrapper {
   position: relative;
@@ -544,5 +722,94 @@ export default {
   padding: 48px;
   color: var(--muted);
   font-size: 14px;
+}
+
+@media (max-width: 600px) {
+  .gallery-view {
+    gap: 16px;
+  }
+  .section-heading {
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .filter-tabs {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .filter-tab {
+    flex: 0 0 auto;
+    min-height: 40px;
+    white-space: nowrap;
+  }
+  .drop-zone {
+    padding: 18px 14px;
+  }
+  .gallery-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .img-wrapper {
+    height: clamp(120px, 38vw, 180px);
+  }
+  .img-hover-overlay {
+    display: none;
+  }
+  .img-meta {
+    padding: 9px;
+  }
+  .img-caption {
+    font-size: 12px;
+  }
+  .img-owner {
+    font-size: 11px;
+  }
+  .modal-overlay,
+  .lightbox-overlay {
+    padding: 12px;
+  }
+  .modal {
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+  }
+  .modal-head,
+  .modal-body,
+  .modal-foot {
+    padding-inline: 14px;
+  }
+  .modal-foot {
+    flex-wrap: wrap;
+  }
+  .lightbox-card {
+    max-width: 100%;
+    max-height: 90dvh;
+  }
+  .lightbox-card img {
+    max-height: 72dvh;
+  }
+  .empty-state {
+    padding: 28px 16px;
+  }
+}
+
+@media (max-width: 360px) {
+  .gallery-grid {
+    grid-template-columns: 1fr;
+  }
+  .img-wrapper {
+    height: 210px;
+  }
+  .section-heading {
+    flex-direction: column;
+  }
+  .actions {
+    justify-content: flex-start;
+  }
 }
 </style>

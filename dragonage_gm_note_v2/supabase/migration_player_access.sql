@@ -30,8 +30,9 @@ CREATE OR REPLACE FUNCTION public.player_team_context()
 RETURNS TABLE(team_id uuid, campaign_id uuid)
 LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = ''
+SET row_security = off
 AS $$
-  SELECT DISTINCT t.id, t.campaign_id
+  SELECT t.id, t.campaign_id
   FROM public.player_team_members m
   JOIN public.users u ON u.username = m.login_username
   JOIN public.teams t ON t.id = u.team_id
@@ -42,6 +43,8 @@ AS $$
       WHERE other_user.username = m.login_username
         AND other_user.team_id IS DISTINCT FROM u.team_id
     )
+  ORDER BY u.created_at NULLS LAST
+  LIMIT 1
 $$;
 REVOKE ALL ON FUNCTION public.player_team_context() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.player_team_context() TO authenticated;
@@ -175,7 +178,7 @@ AS $$
     'token_url', u.token_url, 'level', u.level, 'age', u.age, 'height', u.height,
     'weight', u.weight, 'race', u.race, 'background', u.background,
     'social_class', u.social_class, 'class', u.class, 'motivation', u.motivation,
-    'goal', u.goal, 'strengths', u.strengths, 'doom', u.doom,
+    'goal', u.goal, 'strengths', u.strengths,
     'languages', u.languages, 'traits', u.traits,
     'character_quirk', u.character_quirk, 'biography', u.biography
   )

@@ -20,8 +20,10 @@
           class="result-item"
           @click="$emit('close')"
         >
-          <span class="res-title">{{ c.character_name || '이름 없음' }}</span>
-          <span class="res-sub muted">PL: {{ c.player }} · {{ getTeamName(c.team_id) }}</span>
+          <span class="res-title">{{ c.character_name || "이름 없음" }}</span>
+          <span class="res-sub muted"
+            >PL: {{ c.player }} · {{ getTeamName(c.team_id) }}</span
+          >
         </router-link>
       </div>
 
@@ -36,7 +38,7 @@
           @click="$emit('close')"
         >
           <span class="res-title">{{ t.name }}</span>
-          <span class="res-sub muted">{{ t.region || '지역 미정' }}</span>
+          <span class="res-sub muted">{{ t.region || "지역 미정" }}</span>
         </router-link>
       </div>
 
@@ -65,25 +67,36 @@ export default {
     query: { type: String, required: true },
   },
   computed: {
-    teams() { return this.$store.getters.sortedTeams; },
-    scenarios() { return this.$store.getters.sortedScenarios; },
-    allCharacters() {
-      return this.teams.flatMap((t) => (t.characters || []).map((c) => ({ ...c, team_id: t.id })));
+    teams() {
+      return this.$store.getters.sortedTeams;
     },
-    q() { return this.query.trim().toLowerCase(); },
+    scenarios() {
+      return this.$store.getters.sortedScenarios;
+    },
+    allCharacters() {
+      return this.teams.flatMap((t) =>
+        (t.characters || []).map((c) => ({ ...c, team_id: t.id }))
+      );
+    },
+    q() {
+      return this.query.trim().toLowerCase();
+    },
 
     characterResults() {
       if (!this.q) return [];
       return this.allCharacters.filter(
         (c) =>
-          (c.character_name && c.character_name.toLowerCase().includes(this.q)) ||
+          (c.character_name &&
+            c.character_name.toLowerCase().includes(this.q)) ||
           (c.username && c.username.toLowerCase().includes(this.q)) ||
           (c.player && c.player.toLowerCase().includes(this.q))
       );
     },
     teamResults() {
       if (!this.q) return [];
-      return this.teams.filter((t) => t.name && t.name.toLowerCase().includes(this.q));
+      return this.teams.filter(
+        (t) => t.name && t.name.toLowerCase().includes(this.q)
+      );
     },
     scenarioResults() {
       if (!this.q) return [];
@@ -112,20 +125,67 @@ export default {
 
 <style scoped>
 /* 검색어 자동 완성 결과 목록과 결과 항목의 표시를 담당합니다. */
-.search-results { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-.search-head { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
-.results-list { display: flex; flex-direction: column; gap: 14px; }
-.result-section { display: flex; flex-direction: column; gap: 4px; }
-.section-tag { font: 700 10px "DM Mono", monospace; color: var(--accent); text-transform: uppercase; margin-bottom: 2px; }
+.search-results {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.search-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 8px;
+}
+.results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.result-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.section-tag {
+  font: 700 10px "DM Mono", monospace;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
 .result-item {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 10px; border-radius: 4px; text-decoration: none; color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 4px;
+  text-decoration: none;
+  color: var(--ink);
   transition: background 0.1s;
 }
-.result-item:hover { background: var(--paper); }
-.res-title { font-weight: 600; font-size: 13px; }
-.res-sub { font-size: 11px; }
-.res-code { font: 700 10px "DM Mono", monospace; background: var(--line); padding: 2px 6px; border-radius: 2px; margin-right: 8px; }
+.result-item:hover {
+  background: var(--paper);
+}
+.res-title {
+  font-weight: 600;
+  font-size: 13px;
+}
+.res-sub {
+  font-size: 11px;
+}
+.res-code {
+  font: 700 10px "DM Mono", monospace;
+  background: var(--line);
+  padding: 2px 6px;
+  border-radius: 2px;
+  margin-right: 8px;
+}
 
-.empty-search { padding: 24px; text-align: center; color: var(--muted); font-size: 13px; }
+.empty-search {
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
 </style>

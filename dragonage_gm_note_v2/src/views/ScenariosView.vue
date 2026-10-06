@@ -8,30 +8,64 @@
     </div>
 
     <div v-if="!scenarios.length" class="empty-state">
-      {{ isGM ? '등록된 시나리오가 없습니다.' : '본인 팀이 완료한 이전 단계 기록이 없습니다.' }}
+      {{
+        isGM
+          ? "등록된 시나리오가 없습니다."
+          : "표시할 시나리오 단계가 없습니다."
+      }}
     </div>
 
-    <div v-else-if="recordsError" class="empty-state">팀별 서버 기록 조회 실패: {{ recordsError }}</div>
     <div v-else class="scenarios-layout">
       <!-- 시나리오 목록 -->
       <div class="scenario-list">
-        <button
+        <div
           v-for="(scenario, index) in scenarios"
           :key="scenario.id"
-          :class="['scenario-item', { selected: selectedId === scenario.id }]"
-          @click="selectScenario(scenario)"
+          class="scenario-list-row"
         >
-          <span class="scenario-number">{{ index + 1 }}</span>
-          <div class="scenario-info">
-            <span class="scenario-name">{{ scenario.title }}</span>
-            <span class="scenario-description muted">{{ scenario.description || '설명이 없습니다.' }}</span>
-            <span class="muted"
-              >{{ (scenario.questions || []).length }}개 질문</span
-            >
-          </div>
-          <span class="scenario-code">{{ scenario.code }}</span>
-          <span class="scenario-arrow">›</span>
-        </button>
+          <button
+            :class="[
+              'scenario-item',
+              {
+                selected: selectedId === scenario.id,
+                inactive: scenario.is_active === false,
+              },
+            ]"
+            @click="selectScenario(scenario)"
+          >
+            <span class="scenario-number">{{ index + 1 }}</span>
+            <div class="scenario-info">
+              <span class="scenario-name">{{ scenario.title }}</span>
+              <span class="scenario-description muted">{{
+                scenario.description || "설명이 없습니다."
+              }}</span>
+              <span class="muted"
+                >{{ (scenario.questions || []).length }}개 질문</span
+              >
+              <span v-if="scenario.is_active === false" class="inactive-badge">
+                비활성
+              </span>
+            </div>
+            <span class="scenario-code">{{ scenario.code }}</span>
+            <span class="scenario-arrow">›</span>
+          </button>
+          <button
+            v-if="isGM"
+            class="stage-activation-button"
+            type="button"
+            :disabled="Boolean(updatingStageIds[scenario.step_number])"
+            :aria-label="`${scenario.title} 시나리오 ${
+              scenario.is_active === false ? '활성화' : '비활성화'
+            }`"
+            :title="
+              scenario.is_active === false
+                ? '시나리오 활성화'
+                : '시나리오 비활성화'
+            "
+            :class="{ 'is-inactive': scenario.is_active === false }"
+            @click.stop="toggleStageActive(scenario)"
+          ></button>
+        </div>
       </div>
 
       <!-- 시나리오 상세 -->
@@ -40,20 +74,40 @@
           <span class="eyebrow">{{ selected.code }}</span>
           <h2>{{ selected.title }}</h2>
           <p class="muted">{{ selected.description }}</p>
-          <router-link v-if="isGM"
+          <router-link
+            v-if="isGM"
             :to="'/scenarios/' + selected.id"
-            class="primary-button"
+            class="primary-button scenario-record-link"
             style="display: inline-block; margin-top: 12px"
           >
             팀별 플레이 기록 작성 / 편집 →
           </router-link>
-          <router-link v-else :to="{ path: '/scenarios/' + selected.id, query: { teamId: playerTeamId } }" class="primary-button" style="display:inline-block;margin-top:12px">
+          <router-link
+            v-else
+            :to="{
+              path: '/scenarios/' + selected.id,
+              query: { teamId: playerTeamId },
+            }"
+            class="primary-button scenario-record-link"
+            style="display: inline-block; margin-top: 12px"
+          >
             내 팀 답변 보기 / 편집 →
+          </router-link>
+          <router-link
+            :to="{
+              name: 'scenario-npcs',
+              params: { scenarioId: selected.step_number },
+            }"
+            class="outline-button scenario-npcs-link"
+          >
+            주요 NPC 보기 →
           </router-link>
         </div>
 
         <div class="questions-block">
-          <p v-if="stageQuestionsError" class="empty-state">단계 질문을 불러오지 못했습니다: {{ stageQuestionsError }}</p>
+          <p v-if="stageQuestionsError" class="empty-state">
+            단계 질문을 불러오지 못했습니다: {{ stageQuestionsError }}
+          </p>
           <div class="section-heading">
             <span class="eyebrow">QUESTIONS</span>
           </div>
@@ -81,10 +135,24 @@
                   <span
                     v-for="team in teamsForChoice(question.id, choice.id)"
                     :key="team.id"
-                    class="choice-team-dot"
+                    :class="[
+                      'choice-team-dot',
+                      {
+                        'is-own-team': !isGM && team.id === playerTeamId,
+                        'is-other-team': !isGM && team.id !== playerTeamId,
+                      },
+                    ]"
                     :style="{ backgroundColor: team.color || '#999' }"
-                    :title="team.name"
-                    :aria-label="team.name"
+                    :title="
+                      !isGM && team.id === playerTeamId
+                        ? `내 팀 · ${team.name}`
+                        : team.name
+                    "
+                    :aria-label="
+                      !isGM && team.id === playerTeamId
+                        ? `내 팀, ${team.name}`
+                        : team.name
+                    "
                     role="img"
                   ></span>
                 </span>
@@ -97,6 +165,9 @@
         </div>
 
         <!-- 팀별 완료 현황 요약 -->
+        <p v-if="recordsError" class="empty-state">
+          팀별 서버 기록 조회 실패: {{ recordsError }}
+        </p>
         <div v-if="isGM" class="team-status-block">
           <div class="section-heading">
             <span class="eyebrow">TEAM STATUS</span>
@@ -132,7 +203,12 @@
 </template>
 
 <script>
-import { getProgressStageQuestions, getTeamProgressRecords } from "@/services/scenarios";
+import {
+  getProgressStageQuestions,
+  getTeamProgressRecords,
+  uniqueProgressStages,
+} from "@/services/scenarios";
+import { getProgressStages, setProgressStageActive } from "@/services/teams";
 
 export default {
   name: "ScenariosView",
@@ -140,59 +216,95 @@ export default {
     return {
       selectedId: null,
       teamRecords: {},
+      playerTrackerRequestId: 0,
+      scenarioSelectionRequestId: 0,
       recordsError: null,
       stageQuestions: [],
       stageQuestionsError: null,
+      updatingStageIds: {},
     };
   },
   computed: {
     scenarios() {
-      const stages = this.$store.state.progressStages.map((stage) => ({
+      let stages = uniqueProgressStages(this.$store.state.progressStages);
+      if (!this.isGM) {
+        const team = this.playerTeam;
+        const visibleStep = Math.max((Number(team?.progress_step) || 1) - 1, 0);
+        stages = stages.filter(
+          (stage) =>
+            stage.is_active !== false && stage.step_number <= visibleStep
+        );
+      }
+      return stages.map((stage) => ({
         ...stage,
         id: String(stage.step_number),
         code: `S${String(stage.step_number).padStart(2, "0")}`,
-        questions: this.stageQuestions.filter((question) => question.step_number === stage.step_number),
+        questions: this.stageQuestions.filter(
+          (question) => question.step_number === stage.step_number
+        ),
       }));
-      if (this.isGM) return stages;
-      const team = this.$store.state.teams[0];
-      return stages.filter((stage) => stage.step_number < Number(team?.progress_step || 1)
-        && this.playerStageRecords.some((record) => record.step_number === stage.step_number && record.completed));
     },
-    isGM() { return this.$store.state.userRole !== "player"; },
-    playerTeamId() { return this.$store.state.playerTeamId; },
-    playerStageRecords() { return this.$store.state.playerStageRecords || []; },
+    isGM() {
+      return this.$store.getters.isGM;
+    },
+    playerTeamId() {
+      return this.$store.getters.activePlayerTeamId;
+    },
+    playerTeam() {
+      return this.sortedTeams.find((team) => team.id === this.playerTeamId);
+    },
     sortedTeams() {
-      return this.$store.getters.sortedTeams;
+      const teams = this.$store.getters.sortedTeams;
+      // Player RLS exposes teams in the same campaign, while tracker queries
+      // expose only completed records. Keep the full team list for comparison.
+      return teams;
     },
     selected() {
-      return this.scenarios.find((s) => s.id === String(this.selectedId)) || null;
+      return (
+        this.scenarios.find((s) => s.id === String(this.selectedId)) || null
+      );
     },
   },
   watch: {
     scenarios(val) {
-      if (val.length && !this.selectedId) this.selectScenario(val[0]);
+      if (!val.length) {
+        this.selectedId = null;
+        return;
+      }
+      if (!val.some((scenario) => scenario.id === String(this.selectedId))) {
+        this.selectScenario(val[0]);
+      }
+    },
+    playerTeamId() {
+      this.refreshPlayerTracker();
+    },
+    sortedTeams() {
+      if (!this.isGM) this.refreshPlayerTracker();
+    },
+    "$store.state.progressStages"() {
+      if (this.isGM) this.loadStageQuestions();
+      else this.refreshPlayerTracker();
     },
   },
   mounted() {
     this.loadStageQuestions();
-    if (!this.isGM) this.loadPlayerRecords();
+    if (!this.isGM) this.refreshPlayerTracker();
     if (this.scenarios.length) this.selectScenario(this.scenarios[0]);
   },
   methods: {
-    async loadPlayerRecords() {
-      try {
-        const records = await getTeamProgressRecords([this.playerTeamId]);
-        this.$store.commit("setPlayerStageRecords", records);
-        if (this.scenarios.length) this.selectScenario(this.scenarios[0]);
-      } catch (error) {
-        this.recordsError = error.message || String(error);
-      }
+    async refreshPlayerTracker() {
+      if (this.isGM) return;
+      const requestId = ++this.playerTrackerRequestId;
+      await this.loadStageQuestions();
+      if (requestId !== this.playerTrackerRequestId) return;
+      if (this.scenarios.length) await this.selectScenario(this.scenarios[0]);
     },
     teamsForChoice(questionId, choiceId) {
       return this.sortedTeams.filter((team) => {
         const answers = this.teamRecords[team.id]?.team_scenario_answers || [];
         return answers.some(
-          (answer) => answer.question_id === questionId && answer.choice_id === choiceId
+          (answer) =>
+            answer.question_id === questionId && answer.choice_id === choiceId
         );
       });
     },
@@ -203,17 +315,53 @@ export default {
         this.stageQuestionsError = error.message || String(error);
       }
     },
+    async toggleStageActive(scenario) {
+      if (!this.isGM || !scenario) return;
+      const stepNumber = Number(scenario.step_number);
+      const nextActive = scenario.is_active === false;
+      this.updatingStageIds = {
+        ...this.updatingStageIds,
+        [stepNumber]: true,
+      };
+      try {
+        await setProgressStageActive(stepNumber, nextActive);
+        this.$store.commit("setProgressStages", await getProgressStages());
+        this.$store.dispatch("showToast", {
+          message: nextActive
+            ? "시나리오를 다시 활성화했습니다."
+            : "시나리오를 비활성화했습니다. 플레이어 목록에서 숨겨집니다.",
+          type: "success",
+        });
+      } catch (error) {
+        this.$store.dispatch("showToast", {
+          message: `시나리오 상태 변경 실패: ${error.message || error}`,
+          type: "error",
+        });
+      } finally {
+        this.updatingStageIds = {
+          ...this.updatingStageIds,
+          [stepNumber]: false,
+        };
+      }
+    },
     async selectScenario(scenario) {
       this.selectedId = scenario.id;
       this.recordsError = null;
+      const requestId = ++this.scenarioSelectionRequestId;
       try {
-        const records = await getTeamProgressRecords(this.sortedTeams.map((team) => team.id));
+        const records = await getTeamProgressRecords(
+          this.sortedTeams.map((team) => team.id)
+        );
+        if (!this.isGM && requestId !== this.scenarioSelectionRequestId) return;
         const map = {};
         for (const r of records) {
-          if (r.step_number === scenario.step_number) map[r.team_id] = r;
+          if (Number(r.step_number) === Number(scenario.step_number)) {
+            map[r.team_id] = r;
+          }
         }
         this.teamRecords = map;
       } catch (error) {
+        if (!this.isGM && requestId !== this.scenarioSelectionRequestId) return;
         this.teamRecords = {};
         this.recordsError = error.message || String(error);
       }
@@ -223,6 +371,18 @@ export default {
 </script>
 
 <style scoped>
+.scenario-record-link {
+  text-decoration: none;
+}
+.scenario-npcs-link {
+  display: inline-block;
+  margin: 12px 0 0 8px;
+  text-decoration: none;
+}
+.scenario-record-link:hover,
+.scenario-record-link:focus-visible {
+  text-decoration: none;
+}
 /* 시나리오 목록과 검색 및 필터 화면에 적용됩니다. */
 .scenarios-view {
   display: flex;
@@ -240,11 +400,19 @@ export default {
   flex-direction: column;
   gap: 4px;
 }
+.scenario-list-row {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
 .scenario-item {
   display: flex;
+  flex: 1;
+  min-width: 0;
   align-items: center;
   gap: 10px;
-  padding: 12px 14px;
+  padding: 12px 30px 12px 14px;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 4px;
@@ -258,6 +426,54 @@ export default {
 .scenario-item.selected {
   border-color: var(--accent);
   background: rgba(201, 121, 84, 0.05);
+}
+.scenario-item.inactive {
+  opacity: 0.68;
+}
+.inactive-badge {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 4px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--line);
+  color: var(--muted);
+  font-size: 10px;
+}
+.stage-activation-button {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  right: 5px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+.stage-activation-button::before {
+  width: 7px;
+  height: 7px;
+  border: 1px solid #9299a3;
+  border-radius: 50%;
+  background: #9299a3;
+  content: "";
+}
+.stage-activation-button.is-inactive::before {
+  background: transparent;
+}
+.stage-activation-button:hover:not(:disabled),
+.stage-activation-button:focus-visible {
+  background: rgba(120, 128, 138, 0.16);
+}
+.stage-activation-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
 }
 .scenario-number {
   display: grid;
@@ -371,6 +587,19 @@ export default {
   border-radius: 50%;
   flex: 0 0 10px;
   cursor: help;
+  transition: opacity 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+.choice-team-dot.is-other-team {
+  opacity: 0.78;
+}
+.choice-team-dot.is-own-team {
+  width: 13px;
+  height: 13px;
+  flex-basis: 13px;
+  border: 2px solid var(--panel);
+  box-shadow: 0 0 0 2px var(--accent);
+  transform: scale(1.04);
+  z-index: 1;
 }
 
 .team-status-grid {
