@@ -144,60 +144,27 @@
         />
         <div class="form-label tag-picker-label">
           <label for="post-character-tag">언급할 캐릭터</label>
-          <div class="tag-character-picker" @focusout="closeTagPicker">
-            <input
+          <div class="tag-character-picker">
+            <select
               id="post-character-tag"
-              v-model="tagSearchQuery"
-              class="form-select"
-              type="search"
-              autocomplete="off"
-              placeholder="캐릭터 검색"
+              v-model="tagCharacterToAdd"
+              class="form-select tag-character-select"
               :disabled="posting"
-              role="combobox"
-              aria-label="게시글에 태그할 캐릭터 검색 및 선택"
-              aria-controls="post-character-tag-options"
-              :aria-expanded="tagPickerOpen"
-              @focus="tagPickerOpen = true"
-            />
-            <div
-              v-if="tagPickerOpen"
-              id="post-character-tag-options"
-              class="tag-character-options"
-              role="listbox"
+              @change="addPostTag"
             >
-              <button
-                v-for="character in filteredTagCharacters"
+              <option value="" disabled>
+                캐릭터를 선택하면 태그가 추가됩니다
+              </option>
+              <option
+                v-for="character in availableCharacters"
                 :key="character.id"
-                type="button"
-                role="option"
-                :aria-selected="tagCharacterToAdd === character.id"
+                :value="character.id"
                 :disabled="postCharacterTags.includes(character.id)"
-                @mousedown.prevent
-                @click="selectTagCharacter(character)"
               >
                 {{ tagOptionLabel(character) }}
-              </button>
-              <span v-if="!filteredTagCharacters.length" class="tag-no-results">
-                검색 결과가 없습니다.
-              </span>
-            </div>
+              </option>
+            </select>
           </div>
-          <button
-            class="outline-button"
-            type="button"
-            :disabled="!tagCharacterToAdd || posting"
-            @click="addPostTag"
-          >
-            태그 추가
-          </button>
-          <button
-            class="outline-button tag-all-team-button"
-            type="button"
-            :disabled="!postingTeamCharacters.length || posting"
-            @click="addAllTeamTags"
-          >
-            팀 전체 태그
-          </button>
         </div>
         <div v-if="postCharacterTags.length" class="tag-chip-list">
           <span
@@ -209,6 +176,7 @@
             <button
               type="button"
               :aria-label="`${characterName(id)} 태그 제거`"
+              :disabled="posting"
               @click="removePostTag(id)"
             >
               ×
@@ -343,7 +311,13 @@
           {{ post.moderationError }}
         </p>
         <div
-          v-if="post.character_tags?.length || canManageBoard || playerViewMode"
+          v-if="
+            post.character_tags?.length ||
+            post.team_id ||
+            post.is_master_artwork ||
+            canManageBoard ||
+            playerViewMode
+          "
           class="character-tags"
         >
           <span class="tag-caption">언급된 캐릭터</span>
@@ -361,13 +335,20 @@
           <span v-if="!post.character_tags?.length" class="muted tag-empty"
             >태그 없음</span
           >
+          <span v-if="post.is_master_artwork" class="team-pill"
+            >마스터 뇌물</span
+          >
+          <span v-else-if="post.team_id" class="team-pill">{{
+            teamNameFor(post.team_id)
+          }}</span>
           <div v-if="canManageBoard" class="moderation-toggle tag-admin-picker">
             마스터 태그 수정
             <select
               v-model="post.tagToAdd"
-              class="form-select"
+              class="form-select tag-character-select"
               :disabled="post.moderating || playerViewMode"
               aria-label="마스터 캐릭터 태그 수정"
+              @change="addExistingPostTag(post)"
             >
               <option value="">캐릭터 선택</option>
               <option
@@ -379,15 +360,6 @@
                 {{ tagOptionLabel(character) }}
               </option>
             </select>
-            <button
-              type="button"
-              class="outline-button"
-              :disabled="!post.tagToAdd || post.moderating || playerViewMode"
-              :class="{ 'preview-disabled': playerViewMode }"
-              @click="addExistingPostTag(post)"
-            >
-              추가
-            </button>
             <span
               v-for="id in post.tagDraft"
               :key="id"
@@ -418,10 +390,6 @@
             </button>
           </div>
         </div>
-        <span v-if="post.is_master_artwork" class="team-pill">마스터 뇌물</span>
-        <span v-else-if="post.team_id" class="team-pill">{{
-          teamNameFor(post.team_id)
-        }}</span>
         <div class="post-artwork-wrap">
           <button
             v-if="post.is_spoiler && !revealedSpoilers[post.id]"
@@ -436,9 +404,23 @@
               'spoiler-blur': post.is_spoiler && !revealedSpoilers[post.id],
             }"
           >
-            <p v-if="post.content" class="post-content">{{ post.content }}</p>
+            <p v-if="post.content" class="post-content">
+              <AutoLinkText :text="post.content" />
+            </p>
+            <div v-if="post.image_paths?.length === 4" class="post-four-images">
+              <button
+                v-for="(url, index) in post.image_urls"
+                :key="post.image_paths[index]"
+                type="button"
+                class="image-open"
+                :aria-label="`??? ??? ${index + 1} ??`"
+                @click="openImage(url)"
+              >
+                <img :src="url" :alt="`??? ?? ??? ${index + 1}`" />
+              </button>
+            </div>
             <div
-              v-if="post.image_paths?.length"
+              v-else-if="post.image_paths?.length"
               class="post-image-carousel"
               :class="{ 'has-arrows': post.image_paths.length > 1 }"
             >
@@ -516,7 +498,7 @@
                   }}</time>
                 </div>
                 <p v-if="comment.content" class="comment-content">
-                  {{ comment.content }}
+                  <AutoLinkText :text="comment.content" />
                 </p>
                 <button
                   v-if="comment.image_path"
@@ -644,6 +626,8 @@
 
 <script>
 import { supabase } from "@/supabase";
+import AutoLinkText from "@/components/common/AutoLinkText.vue";
+import { rememberTabs } from "@/services/rememberTabs.mjs";
 
 const BUCKET = "free-board-images";
 const PAGE_SIZE = 20;
@@ -653,6 +637,19 @@ const DEFAULT_AVATAR = `${process.env.BASE_URL}image/default.webp`;
 
 export default {
   name: "FreeBoardView",
+  mixins: [
+    rememberTabs({
+      selectedTeamId: {
+        choices: (vm) => [
+          "",
+          "__master__",
+          ...vm.visibleBoardTeams.map((team) => team.id),
+        ],
+        fallback: "",
+      },
+    }),
+  ],
+  components: { AutoLinkText },
   data() {
     return {
       user: null,
@@ -678,8 +675,6 @@ export default {
       postIsMasterArtwork: false,
       postCharacterTags: [],
       tagCharacterToAdd: "",
-      tagSearchQuery: "",
-      tagPickerOpen: false,
       revealedSpoilers: {},
       playerTeamId: "",
       taggedCharacterIds: [],
@@ -766,20 +761,6 @@ export default {
           character.team_id === this.playerTeamId || character.is_gm
       );
     },
-    postingTeamCharacters() {
-      const teamId = this.isAdmin ? this.postTeamId : this.playerTeamId;
-      if (!teamId) return [];
-      return this.allCharacters.filter(
-        (character) => character.team_id === teamId
-      );
-    },
-    filteredTagCharacters() {
-      const query = this.tagSearchQuery.trim().toLocaleLowerCase();
-      if (!query) return this.availableCharacters;
-      return this.availableCharacters.filter((character) =>
-        this.tagOptionLabel(character).toLocaleLowerCase().includes(query)
-      );
-    },
   },
   async mounted() {
     await this.initialize();
@@ -805,7 +786,9 @@ export default {
     },
     "$route.query"() {
       this.syncCharacterFiltersFromRoute();
-      const requestedTeam = String(this.$route.query.teamId || "");
+      const requestedTeam = String(
+        this.$route.query.teamId ?? this.selectedTeamId ?? ""
+      );
       this.selectedTeamId =
         requestedTeam === "__master__"
           ? "__master__"
@@ -888,6 +871,14 @@ export default {
           this.canManageBoard && this.selectedTeamId === "__master__";
         this.postTeamId = this.playerTeamId;
       }
+      if (this.$route.query.teamId === undefined) {
+        this.restoreRememberedTabs();
+        this.postIsMasterArtwork =
+          this.canManageBoard && this.selectedTeamId === "__master__";
+        if (this.canManageBoard) {
+          this.postTeamId = this.postIsMasterArtwork ? "" : this.selectedTeamId;
+        }
+      }
       await this.loadPosts();
     },
     selectTeam(teamId) {
@@ -909,16 +900,6 @@ export default {
         return;
       }
       this.loadPosts();
-    },
-    selectTagCharacter(character) {
-      this.tagCharacterToAdd = character.id;
-      this.tagSearchQuery = this.tagOptionLabel(character);
-      this.tagPickerOpen = false;
-    },
-    closeTagPicker(event) {
-      if (!event.currentTarget.contains(event.relatedTarget)) {
-        this.tagPickerOpen = false;
-      }
     },
     async loadPosts(append = false) {
       this.loading = true;
@@ -1180,24 +1161,18 @@ export default {
     },
     addPostTag() {
       const id = this.tagCharacterToAdd;
-      if (!id || this.postCharacterTags.includes(id)) return;
+      if (this.posting || !id || this.postCharacterTags.includes(id)) return;
       this.postCharacterTags = [...this.postCharacterTags, id];
       this.tagCharacterToAdd = "";
-      this.tagSearchQuery = "";
-    },
-    addAllTeamTags() {
-      this.postCharacterTags = this.postingTeamCharacters.map(
-        (character) => character.id
-      );
-      this.tagCharacterToAdd = "";
-      this.tagSearchQuery = "";
     },
     removePostTag(id) {
+      if (this.posting) return;
       this.postCharacterTags = this.postCharacterTags.filter(
         (tagId) => tagId !== id
       );
     },
     addExistingPostTag(post) {
+      if (!this.canManageBoard || post.moderating) return;
       if (!post.tagToAdd || post.tagDraft.includes(post.tagToAdd)) return;
       post.tagDraft = [...post.tagDraft, post.tagToAdd];
       post.tagToAdd = "";
@@ -1431,8 +1406,6 @@ export default {
           this.canManageBoard && this.selectedTeamId === "__master__";
         this.postCharacterTags = [];
         this.tagCharacterToAdd = "";
-        this.tagSearchQuery = "";
-        this.tagPickerOpen = false;
         this.composerOpen = false;
         await this.loadPosts();
       } catch (error) {
@@ -1585,7 +1558,8 @@ export default {
 
 <style scoped>
 .free-board {
-  width: min(920px, 100%);
+  width: 100%;
+  min-width: 0;
   margin: 0 auto;
 }
 .board-heading {
@@ -1707,72 +1681,38 @@ export default {
   color: var(--accent);
 }
 .tag-picker-label {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   margin: 12px 0;
 }
-.tag-picker-label > label {
-  flex: 0 0 100%;
-}
 .tag-character-picker {
-  position: relative;
-  width: min(320px, calc(100% - 100px));
+  width: 100%;
+  max-width: 520px;
   min-width: 0;
-  min-height: 38px;
-  flex: 0 1 320px;
 }
-.tag-character-picker > input {
+.tag-character-select {
+  display: block;
+  box-sizing: border-box;
   width: 100%;
-  min-height: 38px;
-}
-.tag-character-options {
-  position: absolute;
-  z-index: 20;
-  top: calc(100% + 4px);
-  left: 0;
-  width: 100%;
-  max-height: 180px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
-  box-shadow: 0 8px 20px rgb(0 0 0 / 16%);
-}
-.tag-character-options > button {
-  display: block;
-  width: 100%;
-  padding: 8px 10px;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  background: transparent;
   color: var(--ink);
-  text-align: left;
-  overflow-wrap: anywhere;
+  font: inherit;
+  font-size: 14px;
   cursor: pointer;
 }
-.tag-character-options > button:hover:not(:disabled),
-.tag-character-options > button[aria-selected="true"] {
-  background: var(--accent-soft);
+.tag-character-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
-.tag-character-options > button:disabled {
-  color: var(--muted);
+.tag-character-select:disabled {
   opacity: 0.55;
-}
-.tag-no-results {
-  display: block;
-  padding: 10px;
-  color: var(--muted);
-  font-size: 13px;
-}
-.tag-picker-label > button {
-  min-height: 38px;
-  flex: 0 0 auto;
-}
-.tag-all-team-button {
-  white-space: nowrap;
+  cursor: wait;
 }
 .composer-toggle {
   flex: 0 0 auto;
@@ -1788,7 +1728,8 @@ export default {
   transform: translateY(-8px);
 }
 .tag-admin-picker select {
-  min-height: 34px;
+  flex: 1 1 260px;
+  max-width: 520px;
 }
 .character-tags {
   display: flex;
@@ -1796,6 +1737,10 @@ export default {
   flex-wrap: wrap;
   gap: 7px;
   margin: 10px 0;
+}
+.character-tags > .team-pill {
+  margin: 0;
+  flex: 0 0 auto;
 }
 .tag-caption {
   color: var(--muted);
@@ -1832,18 +1777,21 @@ export default {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 3px 7px 3px 9px;
+  max-width: 100%;
+  padding: 4px 6px 4px 10px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--accent-soft);
   color: var(--accent);
-  font-size: 11px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }
 .character-tag-chip button {
   display: inline-grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -1851,6 +1799,12 @@ export default {
   color: inherit;
   font-size: 15px;
   cursor: pointer;
+}
+.character-tag-chip button:hover:not(:disabled) {
+  background: var(--panel);
+}
+.character-tag-chip button:focus-visible {
+  outline: 2px solid var(--accent);
 }
 .character-tag-chip button:disabled {
   opacity: 0.5;
@@ -2059,15 +2013,36 @@ time {
 .post-content {
   margin: 16px 0;
 }
+.post-four-images {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+}
+.post-four-images .image-open {
+  min-width: 0;
+  width: 100%;
+}
+.post-four-images img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: min(65vh, 560px);
+  object-fit: contain;
+  border-radius: 4px;
+}
 .post-image-carousel {
+  container-type: inline-size;
   position: relative;
   display: grid;
-  grid-template-columns: 76px minmax(0, 1fr) 76px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: 2px;
-  width: min(100%, 620px);
+  column-gap: 20px;
+  width: 100%;
+  box-sizing: border-box;
   margin: 0 auto;
-  padding: 10px 6px 36px;
+  padding: 0 0 36px;
   border: 1px solid var(--line);
   border-radius: 5px;
   background: var(--paper);
@@ -2082,37 +2057,40 @@ time {
   cursor: zoom-in;
 }
 .carousel-image {
-  width: 100%;
-  height: min(60vh, 560px);
-  min-height: 220px;
+  width: auto;
+  min-width: 0;
   grid-column: 2;
   touch-action: pan-y;
 }
 .post-image-carousel:not(.has-arrows) {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: auto;
+  justify-content: center;
 }
 .post-image-carousel:not(.has-arrows) .carousel-image {
   grid-column: 1;
 }
+/* Size the center to the picture itself, so the 20px gap has no letterboxing. */
 .carousel-image img {
   display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+  width: auto;
+  height: auto;
+  max-width: min(calc(84cqw - 40px), 900px);
+  max-height: min(65vh, 560px);
   border-radius: 4px;
-  background: var(--paper);
+}
+.post-image-carousel:not(.has-arrows) .carousel-image img {
+  max-width: min(100cqw, 900px);
 }
 .carousel-peek {
   position: relative;
+  align-self: stretch;
   display: block;
   width: 100%;
-  height: min(60vh, 560px);
-  min-height: 220px;
+  min-width: 0;
   padding: 0;
   overflow: hidden;
   border: 0;
-  border-radius: 4px;
-  background: var(--line);
+  background: transparent;
   color: transparent;
   font-size: 0;
   opacity: 0.62;
@@ -2121,11 +2099,10 @@ time {
 .carousel-peek img {
   position: absolute;
   top: 0;
-  width: 100%;
-  max-width: 100%;
+  width: auto;
+  max-width: none;
   height: 100%;
-  object-fit: contain;
-  background: var(--paper);
+  border-radius: 4px;
 }
 .carousel-arrow-left img {
   right: 0;
@@ -2278,17 +2255,22 @@ time {
   position: fixed;
   z-index: 200;
   inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 28px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 64px 28px 28px;
   background: #000e;
 }
 .lightbox img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0 auto;
 }
 .lightbox-close {
+  position: fixed;
+  z-index: 1;
   top: 16px;
   right: 16px;
   width: 38px;
@@ -2333,23 +2315,17 @@ time {
     padding: 7px 10px;
     font-size: 12px;
   }
-  .tag-character-picker {
-    width: auto;
-    flex: 1 1 0;
-  }
   .composer-footer > button,
   .comment-form-footer > button {
     align-self: flex-end;
   }
   .post-image-carousel {
-    grid-template-columns: 42px minmax(0, 1fr) 42px;
-    gap: 1px;
-    padding: 6px 3px 30px;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    column-gap: 20px;
+    padding: 0 0 30px;
   }
-  .carousel-image,
-  .carousel-peek {
-    height: min(48vh, 430px);
-    min-height: 180px;
+  .carousel-image img {
+    max-height: min(55vh, 420px);
   }
   .carousel-peek::after {
     width: 24px;

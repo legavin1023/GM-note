@@ -55,6 +55,15 @@
         <router-link to="/notices" class="nav-item nav-notices">
           <span class="nav-icon">▣</span> 전체공지
         </router-link>
+        <router-link
+          v-if="isGM && !isPlayerPreview"
+          to="/activity"
+          class="nav-item"
+          ><span class="nav-icon">◷</span> 최근활동</router-link
+        >
+        <router-link to="/notifications" class="nav-item"
+          ><span class="nav-icon">🔔</span> 알림 설정</router-link
+        >
       </nav>
     </aside>
 
@@ -119,7 +128,9 @@
               class="notification-trigger"
               :aria-expanded="notificationsOpen"
               aria-haspopup="true"
-              aria-label="내 태그와 글 반응 알림"
+              :aria-label="
+                isGM ? '최근활동과 내 글 반응 알림' : '내 태그와 글 반응 알림'
+              "
               @click="toggleNotifications"
             >
               <span aria-hidden="true">♧</span>
@@ -141,7 +152,7 @@
               aria-label="내 활동 알림"
             >
               <header class="notification-header">
-                <strong>내 활동</strong>
+                <strong>{{ isGM ? "최근활동 · 내 반응" : "내 활동" }}</strong>
                 <button
                   type="button"
                   class="text-button"
@@ -163,7 +174,7 @@
                 v-else-if="!activityNotifications.length"
                 class="notification-empty"
               >
-                새 태그나 댓글이 없습니다.
+                새로운 알림이 없습니다.
               </p>
               <button
                 v-for="item in activityNotifications"
@@ -173,7 +184,11 @@
                 @click="openActivityNotification(item)"
               >
                 <strong>{{
-                  item.kind === "tag" ? "나를 태그한 작품" : "내 작품의 새 댓글"
+                  item.kind === "activity"
+                    ? "최근활동"
+                    : item.kind === "tag"
+                    ? "나를 태그한 작품"
+                    : "내 작품의 새 댓글"
                 }}</strong>
                 <span
                   >{{ item.actor }} ·
@@ -323,6 +338,7 @@
 
 <script>
 import { supabase } from "@/supabase";
+import { activityPreview } from "@/services/activityDetails.mjs";
 import { signOut, onAuthStateChange } from "@/services/auth";
 import { getCampaigns, createCampaign } from "@/services/campaigns";
 import { getTeams, getProgressStages } from "@/services/teams";
@@ -398,6 +414,8 @@ export default {
       return this.$store.state.toast;
     },
     pageTitle() {
+      if (this.$route.name === "recent-activity") return "최근활동";
+      if (this.$route.name === "notification-settings") return "알림 설정";
       if (String(this.$route.name || "").startsWith("notice"))
         return "전체공지";
       return PAGE_TITLES[this.$route.name] || "DragonAge GM";
@@ -531,6 +549,9 @@ export default {
         this.activityNotifications = [
           ...tagNotifications,
           ...commentNotifications,
+          ...(this.isGM && !this.isPlayerPreview
+            ? await this.loadMasterActivityNotifications()
+            : []),
         ]
           .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
           .slice(0, 10);
@@ -549,6 +570,21 @@ export default {
       if (/^player-[0-9a-f-]{36}$/i.test(row.nickname || "")) return "플레이어";
       return row.nickname || "사용자";
     },
+    async loadMasterActivityNotifications() {
+      const { data, error } = await supabase
+        .from("app_activity_logs")
+        .select("*")
+        .order("id", { ascending: false })
+        .limit(10);
+      if (error) throw error;
+      return (data || []).map((log) => ({
+        id: `activity-${log.id}`,
+        kind: "activity",
+        actor: log.actor_label,
+        preview: activityPreview(log),
+        createdAt: log.created_at,
+      }));
+    },
     toggleNotifications() {
       this.notificationsOpen = !this.notificationsOpen;
       if (this.notificationsOpen) {
@@ -561,6 +597,10 @@ export default {
     },
     openActivityNotification(item) {
       this.notificationsOpen = false;
+      if (item.kind === "activity") {
+        this.$router.push({ name: "recent-activity" });
+        return;
+      }
       this.$router.push({
         name: "free-board",
         query: { teamId: item.teamId || undefined, postId: item.postId },
@@ -884,7 +924,6 @@ export default {
 </script>
 
 <style>
-@import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap");
 :root {
   --ink: #292621;
   --muted: #77736c;
@@ -926,7 +965,7 @@ body {
   margin: 0;
   background: var(--paper);
   color: var(--ink);
-  font-family: "Manrope", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  font-family: "Ridibatang", "Batang", serif;
 }
 a {
   color: inherit;
@@ -976,7 +1015,7 @@ a {
 .eyebrow {
   color: var(--muted);
   display: block;
-  font: 500 10px "DM Mono", monospace;
+  font: 500 10px "Ridibatang", "Batang", serif;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -1141,7 +1180,7 @@ a {
   height: 30px;
   background: var(--accent);
   color: var(--accent-foreground);
-  font: 600 11px "DM Mono", monospace;
+  font: 600 11px "Ridibatang", "Batang", serif;
   border-radius: 9px;
   flex-shrink: 0;
 }
@@ -1285,7 +1324,7 @@ a {
 }
 .breadcrumb {
   color: var(--muted);
-  font: 500 9px "DM Mono", monospace;
+  font: 500 9px "Ridibatang", "Batang", serif;
   letter-spacing: 0.12em;
 }
 .topbar-title {
@@ -1316,7 +1355,7 @@ a {
 .gm-badge {
   background: var(--accent);
   color: var(--accent-foreground);
-  font: 700 10px "DM Mono", monospace;
+  font: 700 10px "Ridibatang", "Batang", serif;
   padding: 3px 7px;
   border-radius: 2px;
 }

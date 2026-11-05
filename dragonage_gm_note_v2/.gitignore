@@ -1,4 +1,13 @@
 node_modules/
+.backup-tools/
+.backup-repo/
+.backup.local.env
+.backup-role.sql
+backup/node_modules/
+backup/.staging/
+backup/output/
+backup-output/
+supabase/.temp/
 dist/
 .env.local
 .env

@@ -27,6 +27,9 @@ Deno.serve(async (req: Request) => {
     const admin = createClient(url, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+    const {data: activeProfiles,error: activeError}=await admin.from('users').select('is_active').eq('username',username).not('team_id','is',null);
+    if(activeError)return json({error:'플레이어 상태를 확인하지 못했습니다.'},500);
+    if(activeProfiles?.some(profile=>profile.is_active===false))return json({error:'비활성화된 플레이어입니다. 마스터에게 문의해 주세요.'},403);
 
     if (action === "status") {
       const { data: configured, error } = await admin.rpc("player_pin_setup_status", {
@@ -68,36 +71,20 @@ Deno.serve(async (req: Request) => {
       return json({ error: "숫자 4자리 PIN을 입력해 주세요." }, 400);
     }
 
-    const { data: allowed, error: limitError } = await admin.rpc(
-      "player_pin_login_allowed", { p_username: username },
+    const { data: result, error: verificationError } = await admin.rpc(
+      "verify_player_pin_limited", { p_username: username, p_raw_pin: pin },
     );
-    if (limitError) {
-      console.error("player PIN rate limit lookup failed", limitError.code);
-      return json({ error: "로그인 상태를 확인하지 못했습니다." }, 500);
-    }
-    if (allowed !== true) {
-      return json({ error: "PIN 입력 횟수를 초과했습니다. 15분 후 다시 시도해 주세요." }, 429);
-    }
-
-    const { data: profile, error: profileError } = await admin
-      .from("users").select("id, username, team_id")
-      .eq("username", username).not("team_id", "is", null).maybeSingle();
-    if (profileError) return json({ error: "로그인 정보를 확인하지 못했습니다." }, 500);
-    if (!profile) return json({ error: "아이디 또는 PIN이 올바르지 않습니다." }, 401);
-
-    const { data: pinIsValid, error: pinError } = await admin.rpc("verify_user_pin", {
-      target_user_id: profile.id, raw_pin: pin,
-    });
-    if (pinError) {
-      console.error("player PIN verification failed", pinError.code);
+    if (verificationError) {
+      console.error("player PIN verification failed", verificationError.code);
       return json({ error: "PIN을 확인하지 못했습니다." }, 500);
     }
-    if (pinIsValid !== true) {
-      await admin.rpc("record_player_pin_login_failure", { p_username: username });
+    if (result === "blocked") {
+      return json({ error: "PIN 입력 횟수를 초과했습니다. 15분 후 다시 시도해 주세요." }, 429);
+    }
+    if (result !== "valid") {
       return json({ error: "아이디 또는 PIN이 올바르지 않습니다." }, 401);
     }
 
-    await admin.rpc("clear_player_pin_login_failures", { p_username: username });
     return await createPlayerSession(admin, username);
   } catch (error) {
     console.error("player login request failed", error instanceof Error ? error.message : "unknown error");
@@ -108,11 +95,12 @@ Deno.serve(async (req: Request) => {
 async function createPlayerSession(admin: ReturnType<typeof createClient>, username: string) {
   // Read only identity/team fields. PIN and hash values stay inside SQL.
   const { data: profile, error: profileError } = await admin
-    .from("users").select("id, username, team_id")
+    .from("users").select("id, username, team_id,is_active")
     .eq("username", username).not("team_id", "is", null).maybeSingle();
   if (profileError || !profile) {
     return json({ error: "팀에 연결된 플레이어 계정을 찾을 수 없습니다." }, 404);
   }
+  if(profile.is_active===false)return json({error:'비활성화된 플레이어입니다. 마스터에게 문의해 주세요.'},403);
 
   const { data: existingMapping, error: mappingError } = await admin
     .from("player_team_members").select("user_id")

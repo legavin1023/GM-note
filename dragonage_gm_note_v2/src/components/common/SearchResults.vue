@@ -38,7 +38,9 @@
           @click="$emit('close')"
         >
           <span class="res-title">{{ t.name }}</span>
-          <span class="res-sub muted">{{ t.region || "지역 미정" }}</span>
+          <span class="res-sub muted">{{
+            $store.getters.teamScenarioRegion(t)
+          }}</span>
         </router-link>
       </div>
 
@@ -149,7 +151,7 @@ export default {
   gap: 4px;
 }
 .section-tag {
-  font: 700 10px "DM Mono", monospace;
+  font: 700 10px "Ridibatang", "Batang", serif;
   color: var(--accent);
   text-transform: uppercase;
   margin-bottom: 2px;
@@ -175,7 +177,7 @@ export default {
   font-size: 11px;
 }
 .res-code {
-  font: 700 10px "DM Mono", monospace;
+  font: 700 10px "Ridibatang", "Batang", serif;
   background: var(--line);
   padding: 2px 6px;
   border-radius: 2px;

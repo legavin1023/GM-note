@@ -1,0 +1,43 @@
+name: Weekly full encrypted backup
+on:
+  schedule:
+    - cron: '17 19 * * 0' # Monday 04:17 Asia/Seoul
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: write
+concurrency:
+  group: full-backup
+  cancel-in-progress: false
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm test
+      - name: Dump database and download all Storage files
+        run: npm run backup
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          RECOVERY_CONFIG: ${{ secrets.RECOVERY_CONFIG }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dragonage-full-${{ github.run_id }}-${{ github.run_attempt }}
+          path: output/dragonage.backup.enc
+          retention-days: 35
+          compression-level: 0
+          if-no-files-found: error
+      - name: Keep latest four successful archives
+        run: node prune.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

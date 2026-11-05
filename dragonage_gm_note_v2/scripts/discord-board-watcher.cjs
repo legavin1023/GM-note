@@ -187,6 +187,10 @@ async function poll(client, state) {
 
 async function main() {
   await loadLocalEnv();
+  if (process.env.BOARD_DISCORD_DELIVERY_MODE !== 'legacy') {
+    log('info', 'Board Discord delivery now runs in Supabase; local watcher skipped to prevent duplicates.');
+    return;
+  }
   requireConfig();
   const client = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, {
     auth: { persistSession: false, autoRefreshToken: true, detectSessionInUrl: false },

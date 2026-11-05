@@ -146,6 +146,11 @@
 
 <script>
 import { supabase } from "@/supabase";
+import {
+  npcVisibilityScope,
+  canReadScenarioNpc,
+  scopeNpcQuery,
+} from "@/services/npcVisibility.mjs";
 import { formatNpcRating, getNpcRatingSummaries } from "@/services/npcRatings";
 
 const emptyDraft = () => ({ name: "", age: "", gender: "", token_url: "" });
@@ -161,6 +166,7 @@ export default {
   name: "ScenarioNpcsView",
   data() {
     return {
+      npcRequestId: 0,
       npcs: [],
       ratingSummaries: {},
       ratingsError: "",
@@ -177,6 +183,9 @@ export default {
     };
   },
   computed: {
+    npcScope() {
+      return npcVisibilityScope(this.$store.getters, this.$store.state.teams);
+    },
     isGM() {
       return this.$store.getters.isGM;
     },
@@ -197,6 +206,12 @@ export default {
     },
   },
   watch: {
+    npcScope: {
+      deep: true,
+      handler() {
+        this.loadNpcs();
+      },
+    },
     "$store.state.gmPlayerPreviewMode"(enabled) {
       if (!enabled) return;
       const team = this.$store.getters.teamById(
@@ -222,7 +237,15 @@ export default {
   },
   methods: {
     async loadNpcs() {
+      const scope = this.npcScope;
+      const requestId = (this.npcRequestId = (this.npcRequestId || 0) + 1);
+      this.npcs = [];
+      this.ratingSummaries = {};
       if (
+        !canReadScenarioNpc(scope, {
+          campaign_id: this.campaignId,
+          scenario_step: this.scenarioStep,
+        }) ||
         !this.campaignId ||
         !Number.isInteger(this.scenarioStep) ||
         this.scenarioStep < 1
@@ -232,23 +255,29 @@ export default {
       }
       this.loading = true;
       this.error = "";
-      const { data, error } = await supabase
-        .from("scenario_npcs")
-        .select(
-          "id, campaign_id, scenario_step, name, age, gender, token_url, created_at"
-        )
-        .eq("campaign_id", this.campaignId)
+      const { data, error } = await scopeNpcQuery(
+        supabase
+          .from("scenario_npcs")
+          .select(
+            "id, campaign_id, scenario_step, name, age, gender, token_url, created_at"
+          ),
+        scope
+      )
         .eq("scenario_step", this.scenarioStep)
         .order("name", { ascending: true });
+      if (requestId !== this.npcRequestId) return;
       if (error) this.error = `NPC를 불러오지 못했습니다: ${error.message}`;
       else {
         this.npcs = data || [];
         try {
-          this.ratingSummaries = await getNpcRatingSummaries(
+          const summaries = await getNpcRatingSummaries(
             this.npcs.map((npc) => npc.id)
           );
+          if (requestId !== this.npcRequestId) return;
+          this.ratingSummaries = summaries;
           this.ratingsError = "";
         } catch (ratingError) {
+          if (requestId !== this.npcRequestId) return;
           this.ratingSummaries = {};
           this.ratingsError = ratingError.message;
         }
@@ -493,7 +522,7 @@ export default {
   display: grid;
   place-items: center;
   color: var(--muted);
-  font: 700 18px "DM Mono", monospace;
+  font: 700 18px "Ridibatang", "Batang", serif;
 }
 .npc-card-content h3 {
   margin: 0;

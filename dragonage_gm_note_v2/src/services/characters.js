@@ -5,6 +5,14 @@
  * Supabase Auth(auth.users) = GM 로그인 계정과 완전히 별개.
  */
 import { supabase } from "@/supabase";
+export async function setPlayerActive(characterId, active) {
+  const { data, error } = await supabase.rpc("set_player_active", {
+    p_character_id: characterId,
+    p_active: active,
+  });
+  if (error) throw error;
+  return data;
+}
 
 /** Load character rows belonging to the provided campaign teams. */
 export async function getCharactersForTeams(teamIds) {

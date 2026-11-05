@@ -32,10 +32,11 @@
             ></div>
             <div>
               <h3>{{ team.name }}</h3>
-              <span class="muted">{{ team.region || "지역 미정" }}</span>
+              <span class="muted">{{
+                $store.getters.teamScenarioRegion(team)
+              }}</span>
             </div>
           </div>
-          <p class="team-desc muted">{{ team.description || "설명 없음" }}</p>
           <div class="team-progress-row">
             <div class="progress-bar">
               <div
@@ -94,16 +95,6 @@
           <label class="form-label"
             >팀 이름 <input v-model="newTeam.name" class="form-input" required
           /></label>
-          <label class="form-label"
-            >지역 <input v-model="newTeam.region" class="form-input"
-          /></label>
-          <label class="form-label"
-            >설명
-            <textarea
-              v-model="newTeam.description"
-              class="form-textarea"
-            ></textarea>
-          </label>
           <label class="form-label">
             색상
             <div class="color-row">
@@ -144,7 +135,7 @@ export default {
       saving: false,
       progressLoading: false,
       progressError: null,
-      newTeam: { name: "", region: "", description: "", color: "#b42332" },
+      newTeam: { name: "", color: "#b42332" },
     };
   },
   computed: {
@@ -182,8 +173,6 @@ export default {
         this.showAddTeam = false;
         this.newTeam = {
           name: "",
-          region: "",
-          description: "",
           color: "#b42332",
         };
       } catch (error) {
@@ -251,11 +240,6 @@ export default {
 .team-card-head h3 {
   margin: 0 0 2px;
   font-size: 16px;
-}
-.team-desc {
-  font-size: 13px;
-  margin: 0 0 14px;
-  line-height: 1.5;
 }
 .team-progress-row {
   display: flex;

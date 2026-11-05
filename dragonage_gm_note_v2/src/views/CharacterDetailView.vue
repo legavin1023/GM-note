@@ -17,7 +17,17 @@
         <button class="primary-button" :disabled="saving" @click="handleSave">
           {{ saving ? "저장 중..." : "저장" }}
         </button>
-        <button class="danger-button" @click="handleDelete">삭제</button>
+        <button
+          :class="
+            character.is_active === false ? 'outline-button' : 'danger-button'
+          "
+          :disabled="saving"
+          @click="handleDelete"
+        >
+          {{
+            character.is_active === false ? "다시 활성화" : "플레이어 비활성화"
+          }}
+        </button>
       </div>
     </div>
 
@@ -345,18 +355,30 @@
 </template>
 
 <script>
+import { rememberTabs } from "@/services/rememberTabs.mjs";
 import CharacterNotesPanel from "@/components/CharacterNotesPanel.vue";
 import CharacterTaggedPostsPanel from "@/components/CharacterTaggedPostsPanel.vue";
 import {
   getCharacter,
   saveCharacter,
-  deleteCharacter,
+  setPlayerActive,
   uploadTokenImage,
   getTokenImageHistory,
 } from "@/services/characters";
 
 export default {
   name: "CharacterDetailView",
+  mixins: [
+    rememberTabs(
+      {
+        activeDetailTab: {
+          choices: () => ["profile", "notes", "mentioned-posts"],
+          fallback: "profile",
+        },
+      },
+      (vm) => vm.characterId
+    ),
+  ],
   components: { CharacterNotesPanel, CharacterTaggedPostsPanel },
   props: {
     characterId: { type: String, required: true },
@@ -433,17 +455,21 @@ export default {
     async handleDelete() {
       if (
         !confirm(
-          `'${this.character.character_name}' 캐릭터를 정말 삭제하시겠습니까?`
+          `'${this.character.character_name}' 플레이어를 ${
+            this.character.is_active === false ? "다시 활성화" : "비활성화"
+          }할까요? 캐릭터와 기록은 유지됩니다.`
         )
       )
         return;
       try {
-        await deleteCharacter(this.characterId);
+        const active = this.character.is_active === false;
+        await setPlayerActive(this.characterId, active);
+        this.character.is_active = active;
         // 스토어 팀 목록에서 삭제
         const team = this.teams.find((t) => t.id === this.character.team_id);
         if (team) {
-          const updatedChars = (team.characters || []).filter(
-            (c) => c.id !== this.characterId
+          const updatedChars = (team.characters || []).map((c) =>
+            c.id === this.characterId ? { ...c, is_active: active } : c
           );
           this.$store.commit("updateTeam", {
             ...team,
@@ -451,13 +477,14 @@ export default {
           });
         }
         this.$store.dispatch("showToast", {
-          message: "캐릭터가 삭제되었습니다.",
+          message: active
+            ? "플레이어를 다시 활성화했습니다."
+            : "플레이어를 비활성화했습니다. 기록은 유지됩니다.",
           type: "success",
         });
-        this.$router.push("/characters");
       } catch (error) {
         this.$store.dispatch("showToast", {
-          message: "삭제 실패: " + error.message,
+          message: "상태 변경 실패: " + error.message,
           type: "error",
         });
       }

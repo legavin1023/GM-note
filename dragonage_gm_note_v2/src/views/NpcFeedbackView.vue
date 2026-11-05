@@ -94,7 +94,7 @@
           첫 감상을 남겨주세요.
         </p>
         <article
-          v-for="comment in comments"
+          v-for="comment in commentsWithRatings"
           :key="comment.id"
           class="npc-comment"
         >
@@ -115,6 +115,16 @@
                   commentAuthor(comment.nickname)
                 }}</strong>
                 <span>{{ comment.author_player_name || "플레이어" }}</span>
+                <span
+                  v-if="comment.rating"
+                  class="npc-comment-rating"
+                  :aria-label="`작성자 평점 ${comment.rating}점, 5점 만점`"
+                >
+                  <span aria-hidden="true">{{
+                    "★".repeat(comment.rating) + "☆".repeat(5 - comment.rating)
+                  }}</span>
+                  {{ comment.rating }}/5
+                </span>
               </div>
             </div>
             <time :datetime="comment.created_at">{{
@@ -130,6 +140,11 @@
 
 <script>
 import { supabase } from "@/supabase";
+import {
+  npcVisibilityScope,
+  canReadScenarioNpc,
+  scopeNpcQuery,
+} from "@/services/npcVisibility.mjs";
 
 const DEFAULT_AVATAR = `${process.env.BASE_URL}image/default.webp`;
 
@@ -137,6 +152,7 @@ export default {
   name: "NpcFeedbackView",
   data() {
     return {
+      npcRequestId: 0,
       npc: null,
       ratings: [],
       comments: [],
@@ -150,6 +166,18 @@ export default {
     };
   },
   computed: {
+    commentsWithRatings() {
+      const ratingsByUser = new Map(
+        this.ratings.map((row) => [row.user_id, row.rating])
+      );
+      return this.comments.map((comment) => ({
+        ...comment,
+        rating: ratingsByUser.get(comment.user_id) || null,
+      }));
+    },
+    npcScope() {
+      return npcVisibilityScope(this.$store.getters, this.$store.state.teams);
+    },
     isPlayerPreview() {
       return this.$store.getters.isPlayerPreview;
     },
@@ -169,6 +197,12 @@ export default {
     },
   },
   watch: {
+    npcScope: {
+      deep: true,
+      handler() {
+        this.loadNpc();
+      },
+    },
     "$store.state.gmPlayerPreviewMode"() {
       this.loadNpc();
     },
@@ -184,32 +218,36 @@ export default {
   },
   methods: {
     async loadNpc() {
+      const scope = this.npcScope;
+      const requestId = (this.npcRequestId = (this.npcRequestId || 0) + 1);
+      this.npc = null;
+      this.ratings = [];
+      this.comments = [];
+      this.myRating = null;
       this.loading = true;
       this.error = "";
-      const { data: npc, error } = await supabase
-        .from("scenario_npcs")
-        .select("id, campaign_id, scenario_step, name, age, gender, token_url")
+      if (!scope || scope.maxStep === 0) {
+        this.error = "NPC ??? ?? ? ????.";
+        this.loading = false;
+        return;
+      }
+      const { data: npc, error } = await scopeNpcQuery(
+        supabase
+          .from("scenario_npcs")
+          .select(
+            "id, campaign_id, scenario_step, name, age, gender, token_url"
+          ),
+        scope
+      )
         .eq("id", this.$route.params.npcId)
         .maybeSingle();
-      if (error || !npc) {
+      if (requestId !== this.npcRequestId) return;
+      if (error || !canReadScenarioNpc(this.npcScope, npc)) {
         this.error = error
           ? `NPC 정보를 불러오지 못했습니다: ${error.message}`
           : "NPC를 찾을 수 없습니다.";
         this.loading = false;
         return;
-      }
-      if (this.isPlayerPreview) {
-        const team = this.$store.getters.teamById(
-          this.$store.getters.activePlayerTeamId
-        );
-        if (
-          !team ||
-          Number(npc.scenario_step) >= (Number(team.progress_step) || 1)
-        ) {
-          this.error = "NPC 정보를 찾을 수 없습니다.";
-          this.loading = false;
-          return;
-        }
       }
       this.npc = npc;
       const [ratingsResult, commentsResult] = await Promise.all([
@@ -220,11 +258,12 @@ export default {
         supabase
           .from("scenario_npc_comments")
           .select(
-            "id, nickname, author_player_name, author_character_name, author_token_url, content, created_at"
+            "id, user_id, nickname, author_player_name, author_character_name, author_token_url, content, created_at"
           )
           .eq("npc_id", npc.id)
           .order("created_at", { ascending: false }),
       ]);
+      if (requestId !== this.npcRequestId) return;
       if (ratingsResult.error || commentsResult.error) {
         this.error = `평점과 댓글을 불러오지 못했습니다: ${
           (ratingsResult.error || commentsResult.error).message
@@ -233,6 +272,7 @@ export default {
         this.ratings = ratingsResult.data || [];
         this.comments = commentsResult.data || [];
         const { data: auth } = await supabase.auth.getUser();
+        if (requestId !== this.npcRequestId) return;
         this.myRating =
           this.ratings.find((row) => row.user_id === auth.user?.id)?.rating ||
           null;
@@ -347,7 +387,7 @@ export default {
   display: grid;
   place-items: center;
   color: var(--muted);
-  font: 700 20px "DM Mono", monospace;
+  font: 700 20px "Ridibatang", "Batang", serif;
 }
 .npc-summary h2 {
   margin: 6px 0;
@@ -444,6 +484,16 @@ export default {
   color: var(--muted);
   font-size: 12px;
   overflow-wrap: anywhere;
+}
+.npc-comment-author-names .npc-comment-rating,
+.npc-comment-rating span {
+  color: var(--accent);
+  font-weight: 700;
+}
+.npc-comment-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .npc-comment time {
   flex: 0 0 auto;

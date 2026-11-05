@@ -38,6 +38,17 @@ export default createStore({
     teamById: (state) => (id) => state.teams.find((t) => t.id === id) || null,
     scenarioById: (state) => (id) =>
       state.scenarios.find((s) => s.id === id) || null,
+    teamScenarioRegion: (state) => (team) => {
+      const step = Number(team?.progress_step) || 1;
+      const stage = state.progressStages.find(
+        (item) => Number(item.step_number) === step
+      );
+      if (stage?.title) return stage.title;
+      const scenario = state.scenarios.find(
+        (item) => Number(item.sort_order) === step
+      );
+      return scenario?.title || "시나리오 미정";
+    },
     // 팀 이름순 or sort_order 기준 정렬
     sortedTeams: (state) =>
       [...state.teams]

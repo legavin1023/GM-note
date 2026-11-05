@@ -1,0 +1,13 @@
+SELECT public.push_board_is_shared() AS board_shared,
+  public.push_comments_are_shared() AS comments_shared,
+  (SELECT count(*) FROM public.push_subscriptions) AS subscription_count,
+  (SELECT count(*) FROM public.push_deliveries) AS delivery_count,
+  (SELECT count(*) FROM public.push_event_deliveries) AS event_delivery_count,
+  (SELECT bool_and(relrowsecurity) FROM pg_class WHERE oid IN ('public.push_subscriptions'::regclass, 'public.push_deliveries'::regclass)) AS rls_enabled,
+  NOT has_table_privilege('anon', 'public.push_subscriptions', 'SELECT') AS anonymous_read_blocked,
+  NOT has_function_privilege('authenticated', 'public.claim_push_delivery(uuid,uuid)', 'EXECUTE') AS user_dispatch_blocked,
+  NOT has_function_privilege('authenticated', 'public.claim_push_event(text,uuid,uuid,uuid)', 'EXECUTE') AS user_event_dispatch_blocked,
+  (SELECT count(*) FROM pg_trigger WHERE tgrelid = 'public.team_art_posts'::regclass AND NOT tgisinternal) AS board_trigger_count,
+  EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = 'public.team_art_posts'::regclass AND tgname = 'team_art_new_post_push' AND tgenabled = 'O') AS push_trigger_enabled,
+  EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = 'public.team_art_comments'::regclass AND tgname = 'team_art_own_comment_push' AND tgenabled = 'O') AS comment_trigger_enabled,
+  EXISTS (SELECT 1 FROM vault.secrets WHERE name = 'web_push_webhook_secret') AS webhook_secret_in_vault;

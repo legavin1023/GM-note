@@ -12,9 +12,10 @@
         <div class="team-header-info">
           <div class="team-title-row">
             <h2>{{ team.name }}</h2>
-            <span class="region-badge">{{ team.region || "지역 미정" }}</span>
+            <span class="region-badge">{{
+              $store.getters.teamScenarioRegion(team)
+            }}</span>
           </div>
-          <p class="muted">{{ team.description || "설명이 없습니다." }}</p>
         </div>
         <div v-if="isGM" class="team-header-actions">
           <span v-if="team.is_frozen" class="team-frozen-badge">보류 중</span>
@@ -141,6 +142,7 @@
       </div>
     </section>
 
+    <TeamSessionsPanel :team-id="teamId" />
     <section class="section-block team-memory-section">
       <CharacterNotesPanel
         mode="party-team"
@@ -305,7 +307,9 @@
           <span class="stage-number">{{ stage.step_number }}</span>
           <span class="stage-copy">
             <strong>{{ stage.title }}</strong>
-            <small class="muted">{{ stage.description }}</small>
+            <small class="muted">{{
+              visibleDescription(stage.description)
+            }}</small>
           </span>
           <span v-if="stageSaving[stage.step_number]" class="muted"
             >저장 중…</span
@@ -322,7 +326,9 @@
             <span class="scenario-code">{{ scenario.code }}</span>
             <div class="sr-title">
               <h4>{{ scenario.title }}</h4>
-              <span class="muted">{{ scenario.description }}</span>
+              <span class="muted">{{
+                visibleDescription(scenario.description)
+              }}</span>
               <div
                 v-if="scenarioLogBackups(scenario.id).length"
                 class="scenario-log-links"
@@ -422,16 +428,6 @@
           <label class="form-label"
             >팀 이름 <input v-model="editForm.name" class="form-input" required
           /></label>
-          <label class="form-label"
-            >지역 <input v-model="editForm.region" class="form-input"
-          /></label>
-          <label class="form-label"
-            >설명
-            <textarea
-              v-model="editForm.description"
-              class="form-textarea"
-            ></textarea>
-          </label>
           <label class="form-label">
             색상
             <div class="color-row">
@@ -450,16 +446,17 @@
                 v-model.number="editForm.progress_step"
                 type="number"
                 min="1"
-                max="25"
+                :max="progressTotal || 1"
                 class="form-input"
             /></label>
             <label class="form-label"
               >전체 단계
               <input
-                v-model.number="editForm.total_steps"
+                :value="progressTotal"
                 type="number"
                 min="1"
-                max="25"
+                :max="progressTotal || 1"
+                readonly
                 class="form-input"
             /></label>
           </div>
@@ -741,14 +738,17 @@
 </template>
 
 <script>
+import { rememberTabs } from "@/services/rememberTabs.mjs";
 import {
   updateTeam,
   updatePlayerTeamProfile,
   deleteTeam,
 } from "@/services/teams";
 import { saveCharacter } from "@/services/characters";
+import { getPlayerVisibleDescription } from "@/services/playerDescription";
 import { supabase } from "@/supabase";
 import TeamArtPreview from "@/components/TeamArtPreview.vue";
+import TeamSessionsPanel from "@/components/TeamSessionsPanel.vue";
 import CharacterNotesPanel from "@/components/CharacterNotesPanel.vue";
 import CharacterTaggedPostsPanel from "@/components/CharacterTaggedPostsPanel.vue";
 import {
@@ -766,8 +766,20 @@ import {
 
 export default {
   name: "TeamDetailView",
+  mixins: [
+    rememberTabs(
+      {
+        selectedCharacterTab: {
+          choices: () => ["profile", "notes", "mentioned-posts"],
+          fallback: "profile",
+        },
+      },
+      (vm) => vm.teamId
+    ),
+  ],
   components: {
     TeamArtPreview,
+    TeamSessionsPanel,
     CharacterNotesPanel,
     CharacterTaggedPostsPanel,
   },
@@ -840,7 +852,7 @@ export default {
       return this.$store.state.progressStages;
     },
     progressTotal() {
-      return this.progressStages.length || this.scenarios.length;
+      return this.progressStages.length;
     },
     currentProgressStep() {
       if (!this.progressTotal) return 0;
@@ -916,17 +928,20 @@ export default {
     },
   },
   methods: {
+    visibleDescription(description) {
+      return this.isGM
+        ? description || ""
+        : getPlayerVisibleDescription(description);
+    },
     markImageError(characterId) {
       this.imageErrors = { ...this.imageErrors, [characterId]: true };
     },
     initEditForm() {
       this.editForm = {
         name: this.team.name,
-        region: this.team.region,
-        description: this.team.description,
         color: this.team.color,
         progress_step: this.team.progress_step || 1,
-        total_steps: this.team.total_steps || 5,
+        total_steps: this.progressTotal,
       };
     },
     async loadData() {
@@ -1199,7 +1214,6 @@ export default {
     },
     async openCharacterProfile(character) {
       this.selectedCharacter = character;
-      this.selectedCharacterTab = "profile";
       this.profileEditMode = false;
       this.pendingProfileRequest = null;
       if (character.id !== this.playerCharacterId) return;
@@ -1326,12 +1340,17 @@ export default {
     async handleUpdateTeam() {
       this.saving = true;
       try {
+        const totalSteps =
+          this.progressTotal || Number(this.editForm.total_steps) || 1;
+        const progressStep = Number(this.editForm.progress_step) || 1;
         const updated = this.isGM
-          ? await updateTeam(this.teamId, this.editForm)
+          ? await updateTeam(this.teamId, {
+              ...this.editForm,
+              progress_step: Math.min(Math.max(progressStep, 1), totalSteps),
+              total_steps: totalSteps,
+            })
           : await updatePlayerTeamProfile({
               name: this.editForm.name,
-              region: this.editForm.region,
-              description: this.editForm.description,
               color: this.editForm.color,
             });
         this.$store.commit("updateTeam", { ...this.team, ...updated });
@@ -1818,7 +1837,7 @@ export default {
   gap: 12px;
 }
 .scenario-code {
-  font: 700 12px "DM Mono", monospace;
+  font: 700 12px "Ridibatang", "Batang", serif;
   background: var(--line);
   padding: 4px 8px;
   border-radius: 2px;

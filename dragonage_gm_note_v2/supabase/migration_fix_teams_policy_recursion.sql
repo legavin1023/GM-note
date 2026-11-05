@@ -2,6 +2,8 @@
 -- player-access and shared-GM migrations, so this remains the final teams RLS
 -- definition.
 
+BEGIN;
+
 ALTER FUNCTION public.player_team_context() OWNER TO postgres;
 ALTER FUNCTION public.player_team_context() SET row_security = off;
 GRANT EXECUTE ON FUNCTION public.player_team_context() TO authenticated;
@@ -71,6 +73,8 @@ GRANT EXECUTE ON FUNCTION public.current_user_can_manage_team(uuid, uuid)
   TO authenticated;
 
 DROP POLICY IF EXISTS "teams_owner_all" ON public.teams;
+-- Legacy role subquery traverses users RLS back into teams, causing 42P17.
+DROP POLICY IF EXISTS "Admin can update progress" ON public.teams;
 DROP POLICY IF EXISTS "teams_player_read" ON public.teams;
 DROP POLICY IF EXISTS "teams_shared_gm_all" ON public.teams;
 DROP POLICY IF EXISTS "teams_read_without_recursion" ON public.teams;
@@ -97,4 +101,5 @@ CREATE POLICY "teams_delete_managed_campaign" ON public.teams
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.teams TO authenticated;
 
+COMMIT;
 NOTIFY pgrst, 'reload schema';

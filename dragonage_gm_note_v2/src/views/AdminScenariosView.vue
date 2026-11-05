@@ -315,7 +315,7 @@ export default {
   gap: 8px;
 }
 .q-badge {
-  font: 700 12px "DM Mono", monospace;
+  font: 700 12px "Ridibatang", "Batang", serif;
   color: var(--accent);
 }
 .q-code-input {

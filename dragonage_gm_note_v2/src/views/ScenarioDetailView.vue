@@ -4,7 +4,7 @@
       <div>
         <span class="eyebrow">{{ scenario.code }}</span>
         <h2 class="section-title">{{ scenario.title }}</h2>
-        <p class="muted">{{ scenario.description }}</p>
+        <p class="muted">{{ visibleDescription(scenario.description) }}</p>
       </div>
       <div class="header-actions">
         <router-link to="/scenarios" class="outline-button"
@@ -69,7 +69,9 @@
           ></span>
           <div>
             <h3>{{ selectedTeam.name }} 기록</h3>
-            <span class="muted">{{ selectedTeam.region || "지역 미정" }}</span>
+            <span class="muted">{{
+              $store.getters.teamScenarioRegion(selectedTeam)
+            }}</span>
           </div>
         </div>
         <div v-if="isGM" class="status-toggle">
@@ -197,6 +199,7 @@
 </template>
 
 <script>
+import { rememberTabs } from "@/services/rememberTabs.mjs";
 import CharacterNotesPanel from "@/components/CharacterNotesPanel.vue";
 import {
   getScenario,
@@ -210,9 +213,18 @@ import {
   saveTeamScenarioNote,
   saveTeamScenarioAnswer,
 } from "@/services/scenarios";
+import { getPlayerVisibleDescription } from "@/services/playerDescription";
 
 export default {
   name: "ScenarioDetailView",
+  mixins: [
+    rememberTabs(
+      {
+        selectedTeamId: { choices: (vm) => vm.teams.map((team) => team.id) },
+      },
+      (vm) => vm.scenarioId
+    ),
+  ],
   components: { CharacterNotesPanel },
   props: {
     scenarioId: { type: String, required: true },
@@ -267,9 +279,9 @@ export default {
     },
   },
   async mounted() {
-    if (this.$route.query.teamId) {
+    if (this.teams.some((team) => team.id === this.$route.query.teamId)) {
       this.selectedTeamId = this.$route.query.teamId;
-    } else if (this.teams.length) {
+    } else if (!this.selectedTeamId && this.teams.length) {
       this.selectedTeamId = this.teams[0].id;
     }
     await this.loadScenarioData();
@@ -304,6 +316,11 @@ export default {
     },
   },
   methods: {
+    visibleDescription(description) {
+      return this.isGM
+        ? description || ""
+        : getPlayerVisibleDescription(description);
+    },
     async loadScenarioData() {
       this.previewLocked = false;
       try {
@@ -661,7 +678,7 @@ export default {
   font-size: 15px;
 }
 .q-num {
-  font: 700 12px "DM Mono", monospace;
+  font: 700 12px "Ridibatang", "Batang", serif;
   color: var(--accent);
 }
 
@@ -691,7 +708,7 @@ export default {
   font-weight: 600;
 }
 .choice-code-tag {
-  font: 700 11px "DM Mono", monospace;
+  font: 700 11px "Ridibatang", "Batang", serif;
   color: var(--accent);
   background: var(--paper);
   padding: 2px 6px;

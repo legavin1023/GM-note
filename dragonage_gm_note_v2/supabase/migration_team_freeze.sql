@@ -4,6 +4,8 @@
 -- migration_team_art_board.sql, migration_team_art_all_users_read.sql, and
 -- migration_npc_lore_and_master_art.sql.
 
+BEGIN;
+
 ALTER TABLE public.teams
   ADD COLUMN IF NOT EXISTS is_frozen boolean NOT NULL DEFAULT false;
 
@@ -126,3 +128,5 @@ CREATE POLICY team_art_images_read ON storage.objects
   );
 
 NOTIFY pgrst, 'reload schema';
+
+COMMIT;

@@ -78,7 +78,9 @@
             class="art-media"
             :class="{ blurred: post.is_spoiler && !revealed[post.id] }"
           >
-            <p v-if="post.content" class="art-content">{{ post.content }}</p>
+            <p v-if="post.content" class="art-content">
+              <AutoLinkText :text="post.content" />
+            </p>
             <img
               v-for="(url, index) in post.image_urls"
               :key="`${post.id}-${index}`"
@@ -114,7 +116,7 @@
                     formatDate(comment.created_at)
                   }}</time>
                 </div>
-                <p>{{ comment.content }}</p>
+                <p><AutoLinkText :text="comment.content" /></p>
               </div>
             </div>
             <form
@@ -162,12 +164,14 @@
 
 <script>
 import { supabase } from "@/supabase";
+import AutoLinkText from "@/components/common/AutoLinkText.vue";
 
 const BUCKET = "free-board-images";
 const DEFAULT_AVATAR = `${process.env.BASE_URL}image/default.webp`;
 
 export default {
   name: "TeamArtPreview",
+  components: { AutoLinkText },
   props: {
     teamId: { type: String, required: true },
     characters: { type: Array, default: () => [] },

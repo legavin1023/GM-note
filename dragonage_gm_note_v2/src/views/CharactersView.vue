@@ -43,6 +43,9 @@
         <div class="char-details">
           <div class="char-name-row">
             <h3>{{ char.character_name || "이름 없음" }}</h3>
+            <span v-if="isGM && char.is_active === false" class="badge"
+              >비활성</span
+            >
             <span
               class="team-badge"
               :style="{ borderColor: getTeamColor(char.team_id) }"
@@ -164,6 +167,7 @@
 </template>
 
 <script>
+import { rememberTabs } from "@/services/rememberTabs.mjs";
 import {
   getPlayerCharacterChangeStatus,
   submitPlayerCharacterChange,
@@ -171,6 +175,14 @@ import {
 
 export default {
   name: "CharactersView",
+  mixins: [
+    rememberTabs({
+      selectedTeamFilter: {
+        choices: (vm) => ["", ...vm.teams.map((team) => team.id)],
+        fallback: "",
+      },
+    }),
+  ],
   data() {
     return {
       selectedTeamFilter: "",

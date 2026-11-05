@@ -219,40 +219,6 @@
     </section>
 
     <!-- 최근 활동 -->
-    <section class="section-block">
-      <div class="section-heading">
-        <div>
-          <span class="eyebrow">RECENT ACTIVITY</span>
-          <h2 class="section-title">최근 활동</h2>
-        </div>
-      </div>
-      <div class="activity-list">
-        <div
-          v-for="item in recentActivity"
-          :key="item.key"
-          class="activity-item"
-        >
-          <span class="activity-dot" :style="{ background: item.color }"></span>
-          <div>
-            <div class="activity-title">{{ item.title }}</div>
-            <div class="activity-sub muted">{{ item.sub }}</div>
-          </div>
-          <span class="activity-actor" :class="`activity-actor--${item.actorType}`">
-            {{ item.actorLabel }}
-          </span>
-          <span class="activity-time muted">{{ item.time }}</span>
-        </div>
-        <div v-if="activityLoading" class="empty-state">
-          최근 활동을 불러오는 중…
-        </div>
-        <div v-else-if="activityError" class="empty-state" role="alert">
-          최근 활동을 불러오지 못했습니다: {{ activityError }}
-        </div>
-        <div v-else-if="!recentActivity.length" class="empty-state">
-          최근 활동이 없습니다.
-        </div>
-      </div>
-    </section>
   </div>
 </template>
 
@@ -272,10 +238,6 @@ export default {
       loadingRecords: true,
       recordsError: null,
       progressError: null,
-      activityLogs: [],
-      activityLoading: true,
-      activityError: "",
-      activityChannel: null,
     };
   },
   computed: {
@@ -321,37 +283,6 @@ export default {
       );
       return Math.round(total / this.teams.length);
     },
-    recentActivity() {
-      return this.activityLogs.map((log) => {
-        const operationLabel = {
-          INSERT: "등록",
-          UPDATE: "수정",
-          DELETE: "삭제",
-        }[log.operation] || "변경";
-        const team = this.teams.find((item) => item.id === log.team_id);
-        return {
-          key: log.id,
-          title: `${log.feature} ${operationLabel}`,
-          sub: [log.actor_label, log.entity_label, team?.name]
-            .filter(Boolean)
-            .join(" · "),
-          actorType: log.actor_type,
-          actorLabel:
-            log.actor_type === "master"
-              ? "마스터 · 내 작업"
-              : log.actor_type === "player"
-              ? "플레이어 작업"
-              : "사용자 작업",
-          time: this.formatTime(log.created_at),
-          color:
-            log.actor_type === "master"
-              ? "#d47b83"
-              : log.actor_type === "player"
-              ? "#6887bb"
-              : "#999",
-        };
-      });
-    },
   },
   mounted() {
     if (this.$store.getters.isPlayerPreview) {
@@ -374,25 +305,12 @@ export default {
         () => this.loadAllRecords()
       );
     this.recordsChannel.subscribe();
-    this.activityChannel = this.$supabase
-      .channel(`master-activity-${this._uid}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "app_activity_logs" },
-        () => this.loadRecentActivity()
-      );
-    this.activityChannel.subscribe();
-    this.loadRecentActivity();
     this.loadAllRecords();
   },
   beforeUnmount() {
     if (this.recordsChannel) {
       this.$supabase.removeChannel(this.recordsChannel);
       this.recordsChannel = null;
-    }
-    if (this.activityChannel) {
-      this.$supabase.removeChannel(this.activityChannel);
-      this.activityChannel = null;
     }
   },
   watch: {
@@ -410,25 +328,6 @@ export default {
     },
   },
   methods: {
-    async loadRecentActivity() {
-      this.activityLoading = true;
-      this.activityError = "";
-      const { data, error } = await this.$supabase
-        .from("app_activity_logs")
-        .select(
-          "id, actor_type, actor_label, feature, operation, entity_label, team_id, created_at"
-        )
-        .order("created_at", { ascending: false })
-        .order("id", { ascending: false })
-        .limit(20);
-      if (error) {
-        this.activityLogs = [];
-        this.activityError = error.message;
-      } else {
-        this.activityLogs = data || [];
-      }
-      this.activityLoading = false;
-    },
     async loadAllRecords() {
       this.loadingRecords = true;
       this.recordsError = null;
@@ -580,7 +479,11 @@ export default {
 .metric-card {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(145deg, var(--panel), color-mix(in srgb, var(--paper) 72%, var(--panel)));
+  background: linear-gradient(
+    145deg,
+    var(--panel),
+    color-mix(in srgb, var(--paper) 72%, var(--panel))
+  );
   border: 1px solid var(--line);
   padding: 22px;
   border-radius: 14px;
@@ -644,7 +547,8 @@ export default {
   border-radius: 10px;
   text-decoration: none;
   color: var(--ink);
-  transition: border-color 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
+  transition: border-color 0.16s ease, transform 0.16s ease,
+    box-shadow 0.16s ease;
 }
 .team-progress-card:hover {
   border-color: var(--accent);
@@ -766,7 +670,7 @@ export default {
 }
 .q-code {
   display: inline-block;
-  font: 600 10px "DM Mono", monospace;
+  font: 600 10px "Ridibatang", "Batang", serif;
   background: var(--line);
   padding: 2px 6px;
   border-radius: 2px;
@@ -781,7 +685,7 @@ export default {
 }
 .answer-badge {
   display: inline-block;
-  font: 700 11px "DM Mono", monospace;
+  font: 700 11px "Ridibatang", "Batang", serif;
   padding: 3px 8px;
   border-radius: 2px;
   min-width: 28px;

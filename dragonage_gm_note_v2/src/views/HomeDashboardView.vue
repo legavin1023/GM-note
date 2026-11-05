@@ -330,7 +330,17 @@ export default {
       if (error) {
         console.error("[Home] artwork posts", error);
         this.sectionErrors.posts = `작품 글을 불러오지 못했습니다. migration_team_art_board.sql 적용 여부를 확인해 주세요. (${error.message})`;
-      } else this.posts = await this.withAuthorAvatars(data || []);
+      } else {
+        const posts = await this.withAuthorAvatars(data || []);
+        this.posts = await Promise.all(
+          posts.map(async (post) => ({
+            ...post,
+            preview_image_url: await this.resolvePreviewImage(
+              post.image_paths?.[0]
+            ),
+          }))
+        );
+      }
     },
     async loadComments() {
       let query = supabase
@@ -404,11 +414,23 @@ export default {
       return this.teams.find((team) => team.id === id)?.name || "";
     },
     imageUrl(post) {
-      if (Array.isArray(post.image_paths) && post.image_paths.length) {
-        const path = post.image_paths[0];
-        if (/^(https?:|data:)/i.test(path)) return path;
+      return post.preview_image_url || "";
+    },
+    async resolvePreviewImage(path) {
+      if (!path) return "";
+      if (/^(https?:|data:)/i.test(path)) return path;
+      const { data, error } = await supabase.storage
+        .from("free-board-images")
+        .createSignedUrl(path, 3600);
+      if (!error) return data.signedUrl;
+      const legacy = await supabase.storage
+        .from("post-images")
+        .createSignedUrl(path, 3600);
+      if (legacy.error) {
+        console.warn("[Home] artwork preview unavailable", error, legacy.error);
+        return "";
       }
-      return "";
+      return legacy.data.signedUrl;
     },
     revealPostSpoiler(postId) {
       this.revealedSpoilers = {

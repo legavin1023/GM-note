@@ -1,0 +1,7 @@
+{
+  "name": "dragonage-private-backup",
+  "private": true,
+  "type": "module",
+  "scripts": { "backup": "node backup.mjs", "test": "node --test crypto.test.mjs" },
+  "dependencies": { "pg": "8.16.3" }
+}

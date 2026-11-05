@@ -301,7 +301,7 @@ export default {
   font-size: 14px;
 }
 .code-badge {
-  font: 700 11px "DM Mono", monospace;
+  font: 700 11px "Ridibatang", "Batang", serif;
   background: var(--panel);
   padding: 2px 6px;
   border-radius: 2px;

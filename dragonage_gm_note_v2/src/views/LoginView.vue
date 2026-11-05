@@ -144,10 +144,13 @@
       <router-link
         v-if="playerMode"
         class="login-switch"
-        :to="{ name: 'gm-login' }"
+        :to="{ name: 'gm-login', query: $route.query }"
         >GM 로그인으로</router-link
       >
-      <router-link v-else class="login-switch" :to="{ name: 'login' }"
+      <router-link
+        v-else
+        class="login-switch"
+        :to="{ name: 'login', query: $route.query }"
         >플레이어 로그인으로</router-link
       >
     </div>
@@ -155,6 +158,7 @@
 </template>
 
 <script>
+import { pushLoginDestination } from "@/services/pushRoutes.mjs";
 import { signIn, signOut } from "@/services/auth";
 import {
   getPlayerLoginUsernames,
@@ -277,7 +281,13 @@ export default {
           );
         }
         // onAuthStateChange가 router guard를 통해 자동 리디렉션
-        this.$router.push({ name: this.playerMode ? "home" : "master" });
+        const redirect = String(this.$route.query.redirect || "");
+        const destination = pushLoginDestination(redirect);
+        if (destination) {
+          this.$router.push(destination);
+        } else {
+          this.$router.push({ name: this.playerMode ? "home" : "master" });
+        }
       } catch (error) {
         if (error.message?.includes("Invalid login credentials")) {
           this.errorMessage = this.playerMode
@@ -325,7 +335,7 @@ export default {
   height: 36px;
   background: #a94b55;
   color: #fff;
-  font: 600 13px "DM Mono", monospace;
+  font: 600 13px "Ridibatang", "Batang", serif;
   border-radius: 2px;
   flex-shrink: 0;
 }

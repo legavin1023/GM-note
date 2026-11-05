@@ -221,7 +221,13 @@
     >
       <div class="lightbox-card">
         <button class="close-lightbox" @click="activeImage = null">×</button>
-        <img :src="activeImage.url" :alt="activeImage.caption" />
+        <div
+          class="lightbox-image-scroll"
+          tabindex="0"
+          aria-label="이미지 스크롤"
+        >
+          <img :src="activeImage.url" :alt="activeImage.caption" />
+        </div>
         <div class="lightbox-caption">
           <h3>{{ activeImage.caption || "이미지" }}</h3>
           <p class="muted">
@@ -234,6 +240,7 @@
 </template>
 
 <script>
+import { rememberTabs } from "@/services/rememberTabs.mjs";
 import {
   getCampaignImages,
   getPlayerTeamGalleryImages,
@@ -243,12 +250,30 @@ import {
   uploadGalleryImage,
 } from "@/services/images";
 import { supabase } from "@/supabase";
+import {
+  npcVisibilityScope,
+  canReadScenarioNpc,
+  scopeNpcQuery,
+} from "@/services/npcVisibility.mjs";
 import { formatNpcRating, getNpcRatingSummaries } from "@/services/npcRatings";
 
 export default {
   name: "GalleryView",
+  mixins: [
+    rememberTabs({
+      selectedTeamFilter: {
+        choices: (vm) => [
+          "",
+          "__master_npcs__",
+          ...vm.teams.map((team) => team.id),
+        ],
+        fallback: "",
+      },
+    }),
+  ],
   data() {
     return {
+      npcRequestId: 0,
       images: [],
       scenarioNpcs: [],
       npcRatingSummaries: {},
@@ -266,6 +291,9 @@ export default {
     };
   },
   computed: {
+    npcScope() {
+      return npcVisibilityScope(this.$store.getters, this.$store.state.teams);
+    },
     isGM() {
       return this.$store.getters.isGM;
     },
@@ -294,24 +322,28 @@ export default {
       );
     },
     visibleScenarioNpcs() {
-      if (!this.isPlayerPreview) return this.scenarioNpcs;
-      const team = this.teams.find((item) => item.id === this.playerTeamId);
-      const visibleStep = Math.max((Number(team?.progress_step) || 1) - 1, 0);
-      return this.scenarioNpcs.filter(
-        (npc) => Number(npc.scenario_step) <= visibleStep
+      return this.scenarioNpcs.filter((npc) =>
+        canReadScenarioNpc(this.npcScope, npc)
       );
     },
   },
   async mounted() {
     const requestedTeam = String(this.$route.query.teamId || "");
-    this.selectedTeamFilter = this.teams.some(
-      (team) => team.id === requestedTeam
-    )
-      ? requestedTeam
-      : "";
+    if (this.$route.query.teamId !== undefined)
+      this.selectedTeamFilter = this.teams.some(
+        (team) => team.id === requestedTeam
+      )
+        ? requestedTeam
+        : "";
     await Promise.all([this.loadImages(), this.loadScenarioNpcs()]);
   },
   watch: {
+    npcScope: {
+      deep: true,
+      handler() {
+        this.loadScenarioNpcs();
+      },
+    },
     isPlayerPreview(enabled) {
       if (enabled) this.showUrlModal = false;
     },
@@ -339,26 +371,43 @@ export default {
   },
   methods: {
     async loadScenarioNpcs() {
-      if (!this.campaignId) return;
+      const scope = this.npcScope;
+      const requestId = (this.npcRequestId = (this.npcRequestId || 0) + 1);
+      this.scenarioNpcs = [];
+      this.npcRatingSummaries = {};
+      if (!scope || scope.maxStep === 0) {
+        this.npcsLoading = false;
+        return;
+      }
       this.npcsLoading = true;
       this.npcsError = null;
-      const { data, error } = await supabase
-        .from("scenario_npcs")
-        .select("id, scenario_step, name, age, gender, token_url")
-        .eq("campaign_id", this.campaignId)
+      const { data, error } = await scopeNpcQuery(
+        supabase
+          .from("scenario_npcs")
+          .select(
+            "id, campaign_id, scenario_step, name, age, gender, token_url"
+          ),
+        scope
+      )
         .order("scenario_step", { ascending: true })
         .order("name", { ascending: true });
+      if (requestId !== this.npcRequestId) return;
       if (error) {
         this.scenarioNpcs = [];
         this.npcsError = error.message;
       } else {
-        this.scenarioNpcs = data || [];
+        this.scenarioNpcs = (data || []).filter((npc) =>
+          canReadScenarioNpc(this.npcScope, npc)
+        );
         try {
-          this.npcRatingSummaries = await getNpcRatingSummaries(
+          const summaries = await getNpcRatingSummaries(
             this.scenarioNpcs.map((npc) => npc.id)
           );
+          if (requestId !== this.npcRequestId) return;
+          this.npcRatingSummaries = summaries;
           this.npcRatingsError = "";
         } catch (ratingError) {
+          if (requestId !== this.npcRequestId) return;
           this.npcRatingSummaries = {};
           this.npcRatingsError = ratingError.message;
         }
@@ -593,7 +642,7 @@ export default {
   display: grid;
   place-items: center;
   color: var(--muted);
-  font: 700 18px "DM Mono", monospace;
+  font: 700 18px "Ridibatang", "Batang", serif;
 }
 .npc-rate-link {
   margin-top: 8px;
@@ -708,20 +757,30 @@ export default {
 
 .lightbox-card {
   position: relative;
+  display: flex;
+  flex-direction: column;
   max-width: 80vw;
   max-height: 80vh;
   background: #000;
   border-radius: 4px;
   overflow: hidden;
 }
+.lightbox-image-scroll {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
 .lightbox-card img {
-  max-width: 100%;
-  max-height: 70vh;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
   display: block;
   object-fit: contain;
   margin: 0 auto;
 }
 .lightbox-caption {
+  flex-shrink: 0;
   padding: 16px;
   background: var(--panel);
 }
@@ -731,6 +790,7 @@ export default {
 }
 .close-lightbox {
   position: absolute;
+  z-index: 1;
   top: 12px;
   right: 12px;
   background: rgba(0, 0, 0, 0.6);
@@ -815,9 +875,6 @@ export default {
   .lightbox-card {
     max-width: 100%;
     max-height: 90dvh;
-  }
-  .lightbox-card img {
-    max-height: 72dvh;
   }
   .empty-state {
     padding: 28px 16px;

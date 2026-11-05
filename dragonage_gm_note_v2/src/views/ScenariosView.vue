@@ -37,7 +37,7 @@
             <div class="scenario-info">
               <span class="scenario-name">{{ scenario.title }}</span>
               <span class="scenario-description muted">{{
-                scenario.description || "설명이 없습니다."
+                visibleDescription(scenario.description) || "설명이 없습니다."
               }}</span>
               <span class="muted"
                 >{{ (scenario.questions || []).length }}개 질문</span
@@ -73,7 +73,7 @@
         <div class="detail-header">
           <span class="eyebrow">{{ selected.code }}</span>
           <h2>{{ selected.title }}</h2>
-          <p class="muted">{{ selected.description }}</p>
+          <p class="muted">{{ visibleDescription(selected.description) }}</p>
           <router-link
             v-if="isGM"
             :to="'/scenarios/' + selected.id"
@@ -239,10 +239,17 @@ import {
   uniqueProgressStages,
 } from "@/services/scenarios";
 import { getProgressStages, setProgressStageActive } from "@/services/teams";
+import { getPlayerVisibleDescription } from "@/services/playerDescription";
 import { supabase } from "@/supabase";
+import { rememberTabs } from "@/services/rememberTabs.mjs";
 
 export default {
   name: "ScenariosView",
+  mixins: [
+    rememberTabs({
+      selectedId: { choices: (vm) => vm.scenarios.map((row) => row.id) },
+    }),
+  ],
   data() {
     return {
       selectedId: null,
@@ -309,13 +316,21 @@ export default {
     },
   },
   watch: {
+    selectedId(id) {
+      const scenario = this.scenarios.find((row) => row.id === id);
+      if (scenario) this.selectScenario(scenario);
+    },
     scenarios(val) {
       if (!val.length) {
         this.selectedId = null;
         return;
       }
       if (!val.some((scenario) => scenario.id === String(this.selectedId))) {
-        this.selectScenario(val[0]);
+        this.selectScenario(
+          val.find(
+            (scenario) => scenario.id === this.rememberedTab("selectedId")
+          ) || val[0]
+        );
       }
     },
     playerTeamId() {
@@ -336,15 +351,24 @@ export default {
     this.loadStageQuestions();
     this.loadScenarioNpcs();
     if (!this.isGM) this.refreshPlayerTracker();
-    if (this.scenarios.length) this.selectScenario(this.scenarios[0]);
+    if (this.scenarios.length) {
+      this.selectScenario(this.selected || this.scenarios[0]);
+    }
   },
   methods: {
+    visibleDescription(description) {
+      return this.isGM
+        ? description || ""
+        : getPlayerVisibleDescription(description);
+    },
     async refreshPlayerTracker() {
       if (this.isGM) return;
       const requestId = ++this.playerTrackerRequestId;
       await this.loadStageQuestions();
       if (requestId !== this.playerTrackerRequestId) return;
-      if (this.scenarios.length) await this.selectScenario(this.scenarios[0]);
+      if (this.scenarios.length) {
+        await this.selectScenario(this.selected || this.scenarios[0]);
+      }
     },
     teamsForChoice(questionId, choiceId) {
       return this.sortedTeams.filter((team) => {
@@ -412,7 +436,7 @@ export default {
         const records = await getTeamProgressRecords(
           this.sortedTeams.map((team) => team.id)
         );
-        if (!this.isGM && requestId !== this.scenarioSelectionRequestId) return;
+        if (requestId !== this.scenarioSelectionRequestId) return;
         const map = {};
         for (const r of records) {
           if (Number(r.step_number) === Number(scenario.step_number)) {
@@ -421,7 +445,7 @@ export default {
         }
         this.teamRecords = map;
       } catch (error) {
-        if (!this.isGM && requestId !== this.scenarioSelectionRequestId) return;
+        if (requestId !== this.scenarioSelectionRequestId) return;
         this.teamRecords = {};
         this.recordsError = error.message || String(error);
       }
@@ -582,11 +606,11 @@ export default {
   border-radius: 50%;
   background: var(--accent);
   color: #fff;
-  font: 700 12px "DM Mono", monospace;
+  font: 700 12px "Ridibatang", "Batang", serif;
   flex-shrink: 0;
 }
 .scenario-code {
-  font: 700 11px "DM Mono", monospace;
+  font: 700 11px "Ridibatang", "Batang", serif;
   background: var(--line);
   padding: 3px 7px;
   border-radius: 2px;
@@ -642,12 +666,12 @@ export default {
   font-weight: 600;
 }
 .q-num {
-  font: 700 11px "DM Mono", monospace;
+  font: 700 11px "Ridibatang", "Batang", serif;
   color: var(--accent);
 }
 .code-badge {
   margin-left: auto;
-  font: 600 10px "DM Mono", monospace;
+  font: 600 10px "Ridibatang", "Batang", serif;
   background: var(--line);
   padding: 2px 6px;
   border-radius: 2px;
@@ -669,7 +693,7 @@ export default {
   font-size: 13px;
 }
 .choice-code {
-  font: 700 10px "DM Mono", monospace;
+  font: 700 10px "Ridibatang", "Batang", serif;
   color: var(--accent);
 }
 .choice-team-markers {

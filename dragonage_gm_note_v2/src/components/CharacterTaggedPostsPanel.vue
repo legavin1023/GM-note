@@ -34,7 +34,7 @@
           }}</time>
         </div>
         <p v-if="post.content" class="tagged-post-content">
-          {{ post.content }}
+          <AutoLinkText :text="post.content" />
         </p>
         <div v-if="post.image_urls.length" class="tagged-post-images">
           <button
@@ -73,9 +73,11 @@
 
 <script>
 import { supabase } from "@/supabase";
+import AutoLinkText from "@/components/common/AutoLinkText.vue";
 
 export default {
   name: "CharacterTaggedPostsPanel",
+  components: { AutoLinkText },
   props: {
     characterId: { type: String, required: true },
     characterName: { type: String, default: "" },

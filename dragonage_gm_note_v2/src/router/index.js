@@ -1,6 +1,7 @@
 import { createRouter, createWebHashHistory } from "vue-router";
 import { supabase } from "@/supabase";
 import store from "@/store";
+import { pushLoginDestination } from "@/services/pushRoutes.mjs";
 
 // 지연 로딩으로 번들 분할
 const LoginView = () => import("@/views/LoginView.vue");
@@ -57,6 +58,17 @@ const routes = [
         path: "master",
         name: "master",
         component: MasterView,
+      },
+      {
+        path: "activity",
+        name: "recent-activity",
+        component: () => import("@/views/RecentActivityView.vue"),
+        meta: { requiresAdmin: true },
+      },
+      {
+        path: "notifications",
+        name: "notification-settings",
+        component: () => import("@/views/NotificationSettingsView.vue"),
       },
       {
         path: "teams",
@@ -159,9 +171,12 @@ router.beforeEach(async (to) => {
   const isAuthenticated = Boolean(session);
 
   if (to.meta.requiresAuth && !isAuthenticated) {
-    return { name: "login" };
+    return { name: "login", query: { redirect: to.fullPath } };
   }
   if (to.meta.requiresGuest && isAuthenticated) {
+    const redirect = String(to.query.redirect || "");
+    const pushDestination = pushLoginDestination(redirect);
+    if (pushDestination) return pushDestination;
     const { data: isGm } = await supabase.rpc("current_user_is_gm");
     if (isGm) return { name: "home" };
     const { data: context } = await supabase.rpc("player_team_context");
@@ -170,11 +185,22 @@ router.beforeEach(async (to) => {
     };
   }
   if (isAuthenticated) {
+    const { data: active, error: activeError } = await supabase.rpc(
+      "current_session_is_active"
+    );
+    if (!activeError && active === false) {
+      await supabase.auth.signOut();
+      return { name: "login" };
+    }
     const { data: isGm } = await supabase.rpc("current_user_is_gm");
     if (to.meta.requiresAdmin && !isGm) return { name: "notices" };
     if (isGm) {
       if (store.getters.isPlayerPreview) {
-        if (["master", "teams", "character-detail"].includes(to.name)) {
+        if (
+          ["master", "teams", "character-detail", "recent-activity"].includes(
+            to.name
+          )
+        ) {
           return {
             name: to.name === "character-detail" ? "characters" : "home",
           };
@@ -211,6 +237,7 @@ router.beforeEach(async (to) => {
     const { data: context, error } = await supabase.rpc("player_team_context");
     if (!error && Array.isArray(context) && context.length) {
       const allowed = [
+        "notification-settings",
         "home",
         "scenarios",
         "scenario-detail",
