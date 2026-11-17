@@ -4,6 +4,7 @@
  * DB 테이블명은 users지만 실제로는 TRPG 캐릭터 데이터.
  * Supabase Auth(auth.users) = GM 로그인 계정과 완전히 별개.
  */
+import { uploadImageToDrive, deleteDriveImage } from "./driveImages";
 import { supabase } from "@/supabase";
 export async function setPlayerActive(characterId, active) {
   const { data, error } = await supabase.rpc("set_player_active", {
@@ -161,8 +162,7 @@ export async function deleteCharacter(characterId) {
 
 /**
  * 토큰 이미지 업로드 후 URL 반환
- * Storage 버킷: campaign-assets
- * 경로: teams/{team_id}/characters/{character_id}/{filename}
+ * 신규 파일은 Drive에 저장하며 기존 Storage URL은 그대로 지원합니다.
  */
 export async function uploadTokenImage(
   file,
@@ -171,43 +171,32 @@ export async function uploadTokenImage(
   campaignId,
   ownerLabel = ""
 ) {
-  const ext = file.name.split(".").pop();
-  const path = `teams/${teamId}/characters/${characterId}/tokens/${Date.now()}.${ext}`;
+  const result = await uploadImageToDrive(file, {
+    kind: "token",
+    teamId,
+    characterId,
+    campaignId,
+  });
 
-  const { error: uploadError } = await supabase.storage
-    .from("campaign-assets")
-    .upload(path, file, { upsert: true, contentType: file.type });
-
-  if (uploadError) {
-    // fallback: post-images 버킷 시도
-    const { error: fallbackError } = await supabase.storage
-      .from("post-images")
-      .upload(path, file, { upsert: true, contentType: file.type });
-
-    if (fallbackError) throw fallbackError;
-
-    const { data } = supabase.storage.from("post-images").getPublicUrl(path);
+  try {
     await registerTokenImage({
       campaignId,
       teamId,
       characterId,
-      url: data.publicUrl,
+      url: result.url,
       ownerLabel,
     });
-    return data.publicUrl;
+  } catch (error) {
+    try {
+      await deleteDriveImage(result.url);
+    } catch {
+      /* retain file for recovery */
+    }
+    throw error;
   }
 
-  const { data } = supabase.storage.from("campaign-assets").getPublicUrl(path);
-  await registerTokenImage({
-    campaignId,
-    teamId,
-    characterId,
-    url: data.publicUrl,
-    ownerLabel,
-  });
-  return data.publicUrl;
+  return result.url;
 }
-
 export async function getTokenImageHistory(characterId) {
   const { data, error } = await supabase
     .from("images")
@@ -241,9 +230,21 @@ async function registerTokenImage({
  * 토큰 이미지 삭제
  */
 export async function deleteTokenImage(teamId, characterId) {
-  const extensions = ["jpg", "jpeg", "png", "gif", "webp"];
-  for (const ext of extensions) {
-    const path = `teams/${teamId}/characters/${characterId}/token.${ext}`;
-    await supabase.storage.from("campaign-assets").remove([path]);
-  }
+  const { data, error } = await supabase
+    .from("users")
+    .select("token_url")
+    .eq("id", characterId)
+    .eq("team_id", teamId)
+    .single();
+  if (error) throw error;
+  const { data: changed, error: updateError } = await supabase
+    .from("users")
+    .update({ token_url: "" })
+    .eq("id", characterId)
+    .eq("team_id", teamId)
+    .select("id");
+  if (updateError) throw updateError;
+  if (!changed?.length) throw new Error("토큰 삭제 권한이 없습니다.");
+  // History/gallery references retain the shared file. Legacy originals stay.
+  await deleteDriveImage(data.token_url);
 }

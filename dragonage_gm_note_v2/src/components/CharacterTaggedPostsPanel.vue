@@ -119,7 +119,12 @@ export default {
                   await supabase.storage
                     .from("free-board-images")
                     .createSignedUrl(path, 3600);
-                return signedError ? "" : signed?.signedUrl || "";
+                if (!signedError) return signed?.signedUrl || "";
+                const { data: legacy, error: legacyError } =
+                  await supabase.storage
+                    .from("post-images")
+                    .createSignedUrl(path, 3600);
+                return legacyError ? "" : legacy?.signedUrl || "";
               })
             );
             return { ...post, image_urls: imageUrls.filter(Boolean) };

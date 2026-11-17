@@ -1,6 +1,7 @@
 /**
  * images.js — 토큰 갤러리 관련 Supabase 함수
  */
+import { uploadImageToDrive, deleteDriveImage } from "./driveImages";
 import { supabase } from "@/supabase";
 
 /**
@@ -175,7 +176,14 @@ export async function saveImage({
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    try {
+      await deleteDriveImage(url);
+    } catch {
+      /* retain file for recovery */
+    }
+    throw error;
+  }
   return data;
 }
 
@@ -183,37 +191,30 @@ export async function saveImage({
  * 이미지 삭제
  */
 export async function deleteImage(imageId) {
-  const { error } = await supabase.from("images").delete().eq("id", imageId);
+  const { data: image, error: readError } = await supabase
+    .from("images")
+    .select("url")
+    .eq("id", imageId)
+    .single();
+  if (readError) throw readError;
+  const { data, error } = await supabase
+    .from("images")
+    .delete()
+    .eq("id", imageId)
+    .select("id");
   if (error) throw error;
+  if (!data?.length) throw new Error("이미지 삭제 권한이 없습니다.");
+  await deleteDriveImage(image.url);
 }
 
 /**
  * 이미지 파일 업로드 후 URL 반환
  */
 export async function uploadGalleryImage(file, campaignId, teamId) {
-  const timestamp = Date.now();
-  const ext = file.name.split(".").pop();
-  const path = `gallery/${campaignId}/${
-    teamId || "common"
-  }/${timestamp}.${ext}`;
-
-  // campaign-assets 버킷 시도
-  const { error: uploadError } = await supabase.storage
-    .from("campaign-assets")
-    .upload(path, file, { upsert: false, contentType: file.type });
-
-  if (uploadError) {
-    // fallback: post-images 버킷
-    const { error: fallbackError } = await supabase.storage
-      .from("post-images")
-      .upload(path, file, { upsert: false, contentType: file.type });
-
-    if (fallbackError) throw fallbackError;
-
-    const { data } = supabase.storage.from("post-images").getPublicUrl(path);
-    return data.publicUrl;
-  }
-
-  const { data } = supabase.storage.from("campaign-assets").getPublicUrl(path);
-  return data.publicUrl;
+  const result = await uploadImageToDrive(file, {
+    kind: "gallery",
+    campaignId,
+    teamId,
+  });
+  return result.url;
 }

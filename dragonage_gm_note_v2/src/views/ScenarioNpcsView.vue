@@ -146,6 +146,7 @@
 
 <script>
 import { supabase } from "@/supabase";
+import { uploadImageToDrive, deleteDriveImage } from "@/services/driveImages";
 import {
   npcVisibilityScope,
   canReadScenarioNpc,
@@ -303,7 +304,7 @@ export default {
         if (this.tokenFile) {
           uploadedPath = await this.uploadTokenImage(this.tokenFile);
           this.uploadedTokenPath = uploadedPath;
-          tokenUrl = this.storagePublicUrl(uploadedPath);
+          tokenUrl = uploadedPath;
         }
         const payload = {
           campaign_id: this.campaignId,
@@ -328,14 +329,11 @@ export default {
         await this.loadNpcs();
       } catch (error) {
         if (uploadedPath) {
-          const { error: cleanupError } = await supabase.storage
-            .from("campaign-assets")
-            .remove([uploadedPath]);
-          if (cleanupError)
-            console.error(
-              "[NPC] failed to clean up unreferenced token",
-              cleanupError
-            );
+          try {
+            await deleteDriveImage(uploadedPath);
+          } catch {
+            console.warn("[NPC] unreferenced Drive token retained for cleanup");
+          }
           this.uploadedTokenPath = "";
         }
         this.formError = `저장하지 못했습니다: ${error.message || error}`;
@@ -374,29 +372,11 @@ export default {
       this.tokenPreview = "";
     },
     async uploadTokenImage(file) {
-      const extension = {
-        "image/jpeg": "jpg",
-        "image/png": "png",
-        "image/webp": "webp",
-        "image/gif": "gif",
-      }[file.type];
-      const path = `npc-tokens/${
-        this.campaignId
-      }/${crypto.randomUUID()}.${extension}`;
-      const { error } = await supabase.storage
-        .from("campaign-assets")
-        .upload(path, file, {
-          contentType: file.type,
-          upsert: false,
-        });
-      if (error) throw error;
-      return path;
-    },
-    storagePublicUrl(path) {
-      const { data } = supabase.storage
-        .from("campaign-assets")
-        .getPublicUrl(path);
-      return data.publicUrl;
+      const result = await uploadImageToDrive(file, {
+        kind: "npc",
+        campaignId: this.campaignId,
+      });
+      return result.url;
     },
     editNpc(npc) {
       this.editingId = npc.id;

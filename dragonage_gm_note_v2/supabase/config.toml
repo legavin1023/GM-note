@@ -12,3 +12,7 @@ verify_jwt = false
 
 [functions.discord-posts]
 verify_jwt = false
+
+# Private database worker: validates a time-limited HMAC inside the function.
+[functions.google-backup]
+verify_jwt = false

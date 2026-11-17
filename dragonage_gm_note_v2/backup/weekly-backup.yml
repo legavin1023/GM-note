@@ -30,6 +30,18 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           RECOVERY_CONFIG: ${{ secrets.RECOVERY_CONFIG }}
+      - name: Copy encrypted full backup to private Google Drive
+        id: google-copy
+        continue-on-error: true
+        run: |
+          if [ -n "$GAS_WEB_APP_URL" ] && [ -n "$GAS_BACKUP_SHARED_SECRET" ]; then
+            node google/upload.mjs output/dragonage.backup.enc
+          else
+            echo "Google archive copy is not configured; existing private artifact backup continues."
+          fi
+        env:
+          GAS_WEB_APP_URL: ${{ secrets.GAS_WEB_APP_URL }}
+          GAS_BACKUP_SHARED_SECRET: ${{ secrets.GAS_BACKUP_SHARED_SECRET }}
       - uses: actions/upload-artifact@v4
         with:
           name: dragonage-full-${{ github.run_id }}-${{ github.run_attempt }}
@@ -41,3 +53,6 @@ jobs:
         run: node prune.mjs
         env:
           GITHUB_TOKEN: ${{ github.token }}
+      - name: Report Google copy failure after preserving the existing artifact
+        if: steps.google-copy.outcome == 'failure'
+        run: exit 1

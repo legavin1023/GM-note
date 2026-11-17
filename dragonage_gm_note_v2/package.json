@@ -7,6 +7,12 @@
     "build": "vue-cli-service build",
     "deploy": "npm run build && gh-pages -d dist",
     "lint": "vue-cli-service lint",
+    "test:drive": "node --test tests/drive-images.test.mjs",
+    "test:google-backup": "node --test tests/google-backup.test.mjs",
+    "backup:google:prepare": "node backup/google/prepare.mjs",
+    "backup:google:status": "node backup/google/status.mjs",
+    "drive:prepare": "node scripts/diagnose-drive.mjs --prepare-paste",
+    "drive:migrate": "node scripts/drive-migration/migrate.mjs",
     "discord:watch-board": "node scripts/discord-board-watcher.cjs"
   },
   "dependencies": {

@@ -625,6 +625,7 @@
 </template>
 
 <script>
+import { uploadImageToDrive, deleteDriveImage } from "@/services/driveImages";
 import { supabase } from "@/supabase";
 import AutoLinkText from "@/components/common/AutoLinkText.vue";
 import { rememberTabs } from "@/services/rememberTabs.mjs";
@@ -1353,23 +1354,42 @@ export default {
     },
     async uploadFiles(items, kind, id) {
       const uploaded = [];
-      for (const item of items) {
-        const file = item.file || item;
-        const path = this.makePath(file, kind, id);
-        const { error } = await supabase.storage
-          .from(BUCKET)
-          .upload(path, file, { contentType: file.type, upsert: false });
-        if (error) {
-          if (uploaded.length) await this.cleanup(uploaded);
-          throw error;
+      try {
+        for (const item of items) {
+          const file = item.file || item;
+          const result = await uploadImageToDrive(file, {
+            kind,
+            teamId: this.isAdmin ? this.postTeamId || null : this.playerTeamId,
+            recordId: id,
+          });
+          uploaded.push(result.url);
         }
-        uploaded.push(path);
+      } catch (error) {
+        try {
+          await this.cleanup(uploaded);
+        } catch {
+          /* keep original upload error */
+        }
+        throw error;
       }
       return uploaded;
     },
     async cleanup(paths) {
-      if (!paths.length) return;
-      const { error } = await supabase.storage.from(BUCKET).remove(paths);
+      for (const path of paths.filter((path) =>
+        /^https?:\/\//i.test(path || "")
+      )) {
+        await deleteDriveImage(path);
+      }
+      const supabasePaths = paths.filter(
+        (path) => path && !/^https?:\/\//i.test(path)
+      );
+
+      if (!supabasePaths.length) return;
+
+      const { error } = await supabase.storage
+        .from(BUCKET)
+        .remove(supabasePaths);
+
       if (error) throw error;
     },
     async createPost() {
@@ -1419,7 +1439,9 @@ export default {
           ? "마스터 뇌물 필드가 없습니다. migration_npc_lore_and_master_art.sql을 필요한 선행 마이그레이션 뒤에 적용해 주세요."
           : error.message?.includes("team_art_posts")
           ? "팀 작품 게시판 설정이 필요합니다. 관리자에게 마이그레이션 적용을 요청해 주세요."
-          : "게시글을 등록하지 못했습니다. 입력 내용과 첨부 이미지는 유지했습니다.";
+          : `게시글을 등록하지 못했습니다. ${
+              error.message || "입력 내용과 첨부 이미지는 유지했습니다."
+            }`;
       } finally {
         this.posting = false;
       }
@@ -1485,8 +1507,9 @@ export default {
           console.error("[FreeBoard] cleanup comment image", cleanupError);
         }
         console.error("[FreeBoard] create comment", error);
-        draft.error =
-          "댓글을 등록하지 못했습니다. 입력 내용과 첨부 이미지는 유지했습니다.";
+        draft.error = `댓글을 등록하지 못했습니다. ${
+          error.message || "입력 내용과 첨부 이미지는 유지했습니다."
+        }`;
       } finally {
         draft.posting = false;
       }
